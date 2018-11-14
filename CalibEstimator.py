@@ -23,7 +23,7 @@ class CalibEstimator:
                  batchSize, # number of examples in each batch
                  numEpochs = 1, # number of times to go over the dataset
                  logfiledir = '',  # filename to print log to
-                 a0=0):  # initial guess for the filters. default: empty
+                 a0=None):  # initial guess for the filters. default: empty
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -57,7 +57,7 @@ class CalibEstimator:
         print('CalibEstimator.initModel()')
 
         # initializer for filters matrix
-        if (self.a0==0):
+        if self.a0 is None:
             kernelInit=tf.initializers.random_normal
         else:
             # transpose and reshape a0 matrix so that dimensions fit tensorflow
@@ -176,6 +176,23 @@ class CalibEstimator:
             y_est=sess.run(self.tensors['y_est'], feed_dict={self.tensors['x']:X})
         return np.sqeeze(y_est)
 
-    def getCaliratedWeights(self):
+    def CalcLoss(self, X, Y):
+        print('CalibEstimator.CalcLoss()')
+
+        loss = 0
+        numBatches = int(math.floor(X.shape[0] / self.batchSize))
+
+        with tf.Session() as sess:
+
+            sess.run(tf.global_variables_initializer())
+            sess.run(self.tensors['valid_init_op'], feed_dict={self.tensors['x_data']: X,
+                                                               self.tensors['y_data_GT']: Y})
+
+            for _ in range(numBatches):
+                loss_val = sess.run(self.tensors['loss'])
+                loss += loss_val
+        return loss
+
+    def getCalibratedWeights(self):
         print('CalibEstimator.getCaliratedWeights()')
         return self.updatedWeights

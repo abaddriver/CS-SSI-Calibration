@@ -80,9 +80,8 @@ class DatasetCreator:
         self.DDx_crop = DDx_crop
         ind_begin = int((self.NDD[1] - DDx_crop)/2)
         ind_end = ind_begin + DDx_crop
-        if not self.dataset:
-            self.DDx_cropInds = (ind_begin, ind_end)
-        else:
+        self.DDx_cropInds = (ind_begin, ind_end)
+        if self.dataset:
             self.dataset['DDs'] = self.dataset['DDs'][:, :, ind_begin:ind_end, :]
 
 

@@ -2,6 +2,7 @@ from DatasetCreator import DatasetCreator
 from CalibEstimator import CalibEstimator
 from SSIImageHandler import SSIImageHandler
 from datetime import datetime
+from SystemDimensions import getSystemDimensions
 import time
 
 # debug or actual run?
@@ -24,19 +25,20 @@ else:
     batchSize = 100
 
 # sizes:
-NCube = [256, 256, 31]  # Cube [y, x, lambda] image size
-NDD = [256, 2592]  # DD [y,x] image size
-NFilt = 301  # number of coefficients to be estimated for each lambda filter
-DDx_new = (NFilt-1)*2 + 256  # the amount of Data influenced by a filter of size 300
+sysDims = getSystemDimensions()
+NCube = sysDims.NCube  # Cube [y, x, lambda] image size
+NDD = sysDims.NDD # DD [y,x] image size
+NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter
+DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 300
 
 # get train database
-myCreator = DatasetCreator(trainPath, NCube=(256,256,31), NDD=(256,2592),maxNExamples=maxNExamples)
+myCreator = DatasetCreator(trainPath, NCube=NCube, NDD=(256,2592),maxNExamples=maxNExamples)
 myCreator.cropDDWidth(DDx_new)
 train_database = myCreator.getDataset()
 NDD[1] = DDx_new
 
 # get validation database
-myCreator = DatasetCreator(validPath, NCube=(256,256,31), NDD=(256,2592),maxNExamples=maxNExamples)
+myCreator = DatasetCreator(validPath, NCube=NCube, NDD=(256,2592),maxNExamples=maxNExamples)
 myCreator.cropDDWidth(DDx_new)
 valid_database = myCreator.getDataset()
 NDD[1] = DDx_new
@@ -60,6 +62,6 @@ cEst.train(Xtrain=train_database['Cubes'],Ytrain=train_database['DDs'],
            Xvalid = valid_database['Cubes'], Yvalid = valid_database['DDs'])
 
 # get calibration and save to file:
-calibRes = cEst.getCaliratedWeights()
+calibRes = cEst.getCalibratedWeights()
 imHand = SSIImageHandler()
 imHand.writeImage(calibRes, calibOutputPath)
