@@ -171,10 +171,22 @@ class CalibEstimator:
     # run a forward pass:
     def forwardPass(self, X):
         print('CalibEstimator.forwardPass()')
+
+        Y = np.zeros((X.shape[0], 1, self.dims['NY'][1], 1), np.float32)
+
+        assert(self.batchSize == 1)
+        numBatches = int(X.shape[0] / self.batchSize)
+
         with tf.Session() as sess:
+            
             sess.run(tf.global_variables_initializer())
-            y_est=sess.run(self.tensors['y_est'], feed_dict={self.tensors['x']:X})
-        return np.sqeeze(y_est)
+            sess.run(self.tensors['valid_init_op'], feed_dict={self.tensors['x_data']: X,
+                                                               self.tensors['y_data_GT']: Y})
+
+            for ii in range(numBatches):
+                y_est = sess.run(self.tensors['y_est'])
+                Y[ii, :, :, :] = y_est
+        return Y
 
     def CalcLoss(self, X, Y):
         print('CalibEstimator.CalcLoss()')
@@ -194,5 +206,6 @@ class CalibEstimator:
         return loss
 
     def getCalibratedWeights(self):
-        print('CalibEstimator.getCaliratedWeights()')
+        print('CalibEstimator.getCalibratedWeights()')
         return self.updatedWeights
+
