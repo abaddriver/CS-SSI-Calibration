@@ -36,18 +36,22 @@ def ConvertDatabaseToTFRecord(inFolder, outFile, isTest=False):
         # read images:
         cubeim = imhand.readImage(cubepath)
         ddim = imhand.readImage(ddpath)
-        height = cubeim.shape[0]
-        width = cubeim.shape[1]
-        channels = cubeim.shape[2]
+        cubeheight = cubeim.shape[0]
+        cubewidth = cubeim.shape[1]
+        cubechannels = cubeim.shape[2]
+        ddheight = ddim.shape[0]
+        ddwidth = ddim.shape[1]
 
         # convert images to string:
         cube_raw = cubeim.tostring()
         dd_raw = ddim.tostring()
 
         example = tf.train.Example(features=tf.train.Features(feature={
-            'height': _int64_feature(height),
-            'width': _int64_feature(width),
-            'channels': _int64_feature(channels),
+            'cubeheight': _int64_feature(cubeheight),
+            'cubewidth': _int64_feature(cubewidth),
+            'cubechannels': _int64_feature(cubechannels),
+            'ddheight': _int64_feature(ddheight),
+            'ddwidth': _int64_feature(ddwidth),
             'Cube': _bytes_feature(cube_raw),
             'DD': _bytes_feature(dd_raw)}))
 
