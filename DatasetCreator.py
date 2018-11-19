@@ -31,8 +31,8 @@ class DatasetCreator:
             self.DDx_cropInds = (0, NDD[1])
             self.DDx_crop = NDD[1]
 
-    def buildDataset(self):
-        print('DatasetCreator.buildDataset()')
+    def getFileLists(self):
+        print('DatasetCreator.getFileLists()')
         # find all the filenames that have both .rawCube and .rawImage endings for dataset
         dirCubeFiles = [f for f in listdir(self.directory) if
                         (isfile(join(self.directory, f)) and f.endswith('_Cube.rawImage'))]
@@ -43,16 +43,28 @@ class DatasetCreator:
         if ((self.maxNExamples != -1) and (len(filenames) > self.maxNExamples)):
             filenames = filenames[0:self.maxNExamples]
 
+        # create the image lists
+        CubeList = list(map(lambda f: join(self.directory, f + '_Cube.rawImage'), filenames))
+        DDList = list(map(lambda f: join(self.directory, f + '_DD.rawImage'), filenames))
+
+        return (CubeList, DDList)
+
+    def buildDataset(self):
+        print('DatasetCreator.buildDataset()')
+
+        # get file lists:
+        (CubeList, DDList) = self.getFileLists()
+
         # iterate over filenames and read Cube and DD images
         h = SSIImageHandler()
         self.filenames = []
         h_index_start = 0
-        Cubes = np.empty([self.NCube[0]*len(filenames), 1, self.NCube[1], self.NCube[2]], dtype=float)
-        DDs = np.empty([self.NDD[0]*len(filenames), 1, self.DDx_crop, 1])
+        Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=float)
+        DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1])
 
-        for filename in filenames:
-            cube = h.readImage(join(self.directory,filename + '_Cube.rawImage'))
-            ddIm = h.readImage(join(self.directory, filename + '_DD.rawImage'))
+        for cubepath, ddpath in zip(CubeList, DDList):
+            cube = h.readImage(cubepath)
+            ddIm = h.readImage(ddpath)
 
             #  check that image dimensions match the specification
             # if it does, inset to database
@@ -62,16 +74,16 @@ class DatasetCreator:
                 ddIm = ddIm[:, self.DDx_cropInds[0]:self.DDx_cropInds[1]]
 
                 # add images to database
-                self.filenames.append(filename)
+                self.filenames.append((cubepath, ddpath))
                 Cubes[h_index_start:h_index_start+self.NCube[0],:, :, :] = np.reshape(cube, (cube.shape[0],1,cube.shape[1],cube.shape[2]))
                 DDs[h_index_start:h_index_start + self.NDD[0], :, :, :] = np.reshape(ddIm, (ddIm.shape[0], 1, ddIm.shape[1], 1))
                 h_index_start += self.NDD[0]
 
         # if there are images with mismatching sizes - remove unused rows:
-        if len(self.filenames)!= len(filenames):
+        if len(self.filenames)!= len(CubeList):
             print('warning: DatasetCreator.buildDataset() - some images contained different sizes than expected')
-            Cubes = np.delete(Cubes, range(h_index_start, self.NCube[0]*len(filenames)), 0)
-            DDs = np.delete(DDs, range(h_index_start, self.NDD[0] * len(filenames)), 0)
+            Cubes = np.delete(Cubes, range(h_index_start, self.NCube[0]*len(CubeList)), 0)
+            DDs = np.delete(DDs, range(h_index_start, self.NDD[0] * len(CubeList)), 0)
         self.dataset['Cubes'] = Cubes
         self.dataset['DDs'] = DDs
 
