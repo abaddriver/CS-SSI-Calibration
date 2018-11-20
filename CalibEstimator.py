@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 import time
 from SSIImageHandler import SSIImageHandler
+import SSITFRecordHandler as recordhandler
 
 
 # Class CalibEstimator
@@ -52,6 +53,60 @@ class CalibEstimator:
 
         assert(len(self.learningRate) >= self.numEpochs)
 
+    # createTFRecordDatasets
+    # ----------------------
+    # create dataset for training
+    def createTFRecordDatasets(self, trainFilenames, validFilenames):
+        print('CalibEstimator.createTFRecordDatasets()')
+        self.tensors = {}
+        self.tensors['db_handle']= tf.placeholder(tf.string, shape=[])
+        next_elem, self.tensors['train_init_op'], self.tensors['valid_init_op'] =\
+            recordhandler.ConvertTFRecordsToDatset(self.tensors['db_handle'],trainFilenames, validFilenames,
+                                               self.batchSize, trainShuffleBuffSize=-1)
+        self.tensors['x'], self.tensors['y_GT'] = next_elem
+        self.tensors['x'].set_shape(shape=(None, 1, self.dims['NX'][1], self.dims['NX'][2]))
+        self.tensors['y_GT'].set_shape(shape=(None, 1, self.dims['NY'][1], 1))
+
+        # calculate the number of examples for train and valid:
+        numTrainingExamples = 0
+        for fn in trainFilenames:
+            numTrainingExamples += sum([1 for record in tf.python_io.tf_record_iterator(fn)])
+
+        numValidExamples = 0
+        for fn in validFilenames:
+            numValidExamples += sum([1 for record in tf.python_io.tf_record_iterator(fn)])
+
+        self.numExamples = {'train': numTrainingExamples * self.dims['NX'][0],
+                            'valid': numValidExamples * self.dims['NX'][0]}
+
+    # createNPArraysDatasets
+    # ----------------------
+    # create dataset for training
+    def createNPArrayDatasets(self):
+        print('CalibEstimator.createNPArraysDatasets()')
+        self.tensors = {}
+        # input:
+        self.tensors['x_data'] = tf.placeholder(tf.float32, shape=[None, 1, self.dims['NX'][1], self.dims['NX'][2]],
+                                                name='x')
+        # output:
+        self.tensors['y_data_GT'] = tf.placeholder(tf.float32, shape=[None, 1, self.dims['NY'][1], 1], name='y_GT')
+        # dataset:
+        self.tensors['train_dataset'] = tf.data.Dataset.from_tensor_slices(
+            (self.tensors['x_data'], self.tensors['y_data_GT'])). \
+            repeat(self.numEpochs).batch(self.batchSize)
+        self.tensors['valid_dataset'] = tf.data.Dataset.from_tensor_slices(
+            (self.tensors['x_data'], self.tensors['y_data_GT'])). \
+            batch(self.batchSize)
+        self.tensors['iter'] = tf.data.Iterator.from_structure(self.tensors['train_dataset'].output_types,
+                                                               self.tensors['train_dataset'].output_shapes)
+        self.tensors['x'], self.tensors['y_GT'] = self.tensors['iter'].get_next()
+        self.tensors['train_init_op'] = self.tensors['iter'].make_initializer(self.tensors['train_dataset'])
+        self.tensors['valid_init_op'] = self.tensors['iter'].make_initializer(self.tensors['valid_dataset'])
+
+    # buildModel
+    # ----------
+    # this function creates the network model
+    # future work: get the model from outside function
     def buildModel(self):
         # this function creates the graph: tensors and operations
         print('CalibEstimator.initModel()')
@@ -66,22 +121,6 @@ class CalibEstimator:
 
         # find the padded value to match the output width:
         paddW = int((self.dims['NY'][1] - self.dims['NX'][1])/2)
-
-        self.tensors = {}
-        # input:
-        self.tensors['x_data'] = tf.placeholder(tf.float32, shape=[None, 1, self.dims['NX'][1], self.dims['NX'][2]], name='x')
-        # output:
-        self.tensors['y_data_GT'] = tf.placeholder(tf.float32, shape=[None,1, self.dims['NY'][1],1], name='y_GT')
-        # dataset:
-        self.tensors['train_dataset'] = tf.data.Dataset.from_tensor_slices((self.tensors['x_data'], self.tensors['y_data_GT'])).\
-            repeat(self.numEpochs).batch(self.batchSize)
-        self.tensors['valid_dataset'] = tf.data.Dataset.from_tensor_slices((self.tensors['x_data'], self.tensors['y_data_GT'])).\
-            batch(self.batchSize)
-        self.tensors['iter'] = tf.data.Iterator.from_structure(self.tensors['train_dataset'].output_types,
-                                                               self.tensors['train_dataset'].output_shapes)
-        self.tensors['x'], self.tensors['y_GT'] = self.tensors['iter'].get_next()
-        self.tensors['train_init_op'] = self.tensors['iter'].make_initializer(self.tensors['train_dataset'])
-        self.tensors['valid_init_op'] = self.tensors['iter'].make_initializer(self.tensors['valid_dataset'])
 
         # network:
         self.tensors['x_padded'] = tf.pad(self.tensors['x'], [[0, 0], [0, 0], [paddW, paddW], [0, 0]], "CONSTANT")
@@ -98,8 +137,20 @@ class CalibEstimator:
         #loss function:
         self.tensors['loss']=tf.losses.mean_squared_error(labels=self.tensors['y_GT'], predictions=self.tensors['y_est'])
 
-    def train(self, Xtrain, Ytrain, Xvalid, Yvalid):
+    # function train
+    # --------------
+    # this function trains the model
+    # inputs:
+    #   DBtype -    'TFRecord' / 'NPArray'
+    #   DBArgs -    specific for each DBType:
+    #               for 'TFRecord': None
+    #               for 'NPArray': dictionary containing the keys: 'Xtrain', 'Ytrain', 'Xvalid', 'Yvalid'
+    def train(self, DBtype='TFRecord', DBargs=None):
         print('CalibEstimator.train()')
+
+        if DBtype == 'NPArray':
+            self.numExamples = {'train': DBargs['Xtrain'].shape[0], 'valid': DBargs['Xvalid'].shape[0]}
+
         self.tensors['learningRate'] = tf.placeholder(tf.float32, shape=[])
         optimizer = tf.train.GradientDescentOptimizer(self.tensors['learningRate'])
         trainOp = optimizer.minimize(self.tensors['loss'])
@@ -112,15 +163,15 @@ class CalibEstimator:
             # start log with basic info:
             logging.basicConfig(filename=logfilename, level=logging.DEBUG)
             logging.info("starting sessions:")
-            logging.info("training size: {0}".format(Xtrain.shape[0]))
-            logging.info("Validation size: {0}".format(Xvalid.shape[0]))
+            logging.info("training size: {0}".format(self.numExamples['train']))
+            logging.info("Validation size: {0}".format(self.numExamples['valid']))
             logging.info("filter length: {0}, numFilters: {1}".format(self.dims['NFilt'], self.dims['L']))
             logging.info("epochs: {0}".format(self.numEpochs))
             # init gloval variables and init
             sess.run(tf.global_variables_initializer())
 
-            numBatchesTrain = int(math.floor(Xtrain.shape[0] / self.batchSize))
-            numBatchesValid = int(math.floor(Xvalid.shape[0] / self.batchSize))
+            numBatchesTrain = int(math.floor(self.numExamples['train'] / self.batchSize))
+            numBatchesValid = int(math.floor(self.numExamples['valid'] / self.batchSize))
 
             # loop over epochs and examples:
             for epoch in range(self.numEpochs):
@@ -130,22 +181,48 @@ class CalibEstimator:
                 start = time.time()
 
                 # init train database:
-                sess.run(self.tensors['train_init_op'], feed_dict={self.tensors['x_data']: Xtrain,
-                                                                   self.tensors['y_data_GT']: Ytrain})
+                if DBtype == 'NPArray':
+                    sess.run(self.tensors['train_init_op'],
+                             feed_dict={self.tensors['x_data']: DBargs['Xtrain'], self.tensors['y_data_GT']: DBargs['Ytrain']})
+                    # run all train examples in batch:
+                    for _ in range(numBatchesTrain):
+                        _, loss_val = sess.run([trainOp, self.tensors['loss']],
+                                               feed_dict={self.tensors['learningRate']: self.learningRate[epoch]})
+                        train_loss += loss_val
 
-                # run all train examples in batch:
-                for _ in range(numBatchesTrain):
-                    _, loss_val = sess.run([trainOp, self.tensors['loss']], feed_dict={self.tensors['learningRate']: self.learningRate[epoch]})
-                    train_loss += loss_val
+                    # init validation database
+                    sess.run(self.tensors['valid_init_op'],
+                             feed_dict={self.tensors['x_data']: DBargs['Xvalid'], self.tensors['y_data_GT']: DBargs['Yvalid']})
 
-                # init validation database
-                sess.run(self.tensors['valid_init_op'], feed_dict={self.tensors['x_data']: Xvalid,
-                                                                   self.tensors['y_data_GT']: Yvalid})
+                    # run all valid examples in batch:
+                    for _ in range(numBatchesValid):
+                        loss_val = sess.run(self.tensors['loss'])
+                        valid_loss += loss_val
+                else:
 
-                # run all valid examples in batch:
-                for _ in range(numBatchesValid):
-                    loss_val = sess.run(self.tensors['loss'])
-                    valid_loss += loss_val
+                    # init train database:
+                    training_handle = sess.run(self.tensors['train_init_op'].string_handle())
+                    sess.run(self.tensors['train_init_op'].initializer)
+
+                    # run all train examples in batch:
+                    for _ in range(numBatchesTrain):
+                        _, loss_val = sess.run([trainOp, self.tensors['loss']],
+                                               feed_dict={self.tensors['learningRate']: self.learningRate[epoch],
+                                                          self.tensors['db_handle']: training_handle})
+                        train_loss += loss_val
+
+                    # init validation database
+                    valid_handle = sess.run(self.tensors['valid_init_op'].string_handle())
+                    sess.run(self.tensors['valid_init_op'].initializer)
+
+                    # run all valid examples in batch:
+                    for _ in range(numBatchesValid):
+                        loss_val = sess.run(self.tensors['loss'], feed_dict={self.tensors['db_handle']: valid_handle})
+                        valid_loss += loss_val
+
+
+
+
 
                 # print loss:
 
