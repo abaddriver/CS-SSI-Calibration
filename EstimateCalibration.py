@@ -25,7 +25,7 @@ if debug_tests == 1:
     batchSize = 2
 else:
     maxNExamples = -1
-    numEpochs = 1000
+    numEpochs = 200
     batchSize = 100
 
 # sizes:
@@ -37,16 +37,16 @@ DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 3
 
 
 if use_tfrecords:
-    trainFilePath = recordhandler.ConvertDatabaseToTFRecords(trainPath, join(trainPath, 'tfrecords'), maxExamples=maxNExamples)
-    validFilePath = recordhandler.ConvertDatabaseToTFRecords(validPath, join(validPath, 'tfrecords'), maxExamples=maxNExamples)
+    trainFilePaths = recordhandler.ConvertDatabaseToTFRecords(trainPath, join(trainPath, 'tfrecords'), maxExamples=maxNExamples)
+    validFilePaths = recordhandler.ConvertDatabaseToTFRecords(validPath, join(validPath, 'tfrecords'), maxExamples=maxNExamples)
 else:
     # get train database
-    myCreator = DatasetCreator(trainPath, NCube=NCube, NDD=(256,2592),maxNExamples=maxNExamples)
+    myCreator = DatasetCreator(trainPath, NCube=NCube, NDD=NDD,maxNExamples=maxNExamples)
     myCreator.cropDDWidth(DDx_new)
     train_database = myCreator.getDataset()
 
     # get validation database
-    myCreator = DatasetCreator(validPath, NCube=NCube, NDD=(256,2592),maxNExamples=maxNExamples)
+    myCreator = DatasetCreator(validPath, NCube=NCube, NDD=NDD,maxNExamples=maxNExamples)
     myCreator.cropDDWidth(DDx_new)
     valid_database = myCreator.getDataset()
 
@@ -54,8 +54,8 @@ else:
     assert(valid_database['Cubes'].shape[0] % batchSize == 0)
 
 NDD[1] = DDx_new
-
-mylearningrate = [0.01]*100 + [0.001]*900
+mylearningrate = [0.01]*100 + [0.001]*100
+useLossWeights = 'proportional'  # {None, 'None', 'proportional'}
 
 # estimate calibration:
 cEst = CalibEstimator(NX=NCube,
@@ -65,10 +65,11 @@ cEst = CalibEstimator(NX=NCube,
                       learningRate=mylearningrate,
                       batchSize=batchSize,
                       numEpochs=numEpochs,
-                      logfiledir=logfiledir)
+                      logfiledir=logfiledir,
+                      useLossWeights=useLossWeights)
 
 if use_tfrecords:
-    cEst.createTFRecordDatasets(trainFilenames=[trainFilePath], validFilenames=[validFilePath])
+    cEst.createTFRecordDatasets(trainFilenames=trainFilePaths, validFilenames=validFilePaths)
     cEst.buildModel()
     cEst.train()
 else:

@@ -24,7 +24,8 @@ class CalibEstimator:
                  batchSize, # number of examples in each batch
                  numEpochs = 1, # number of times to go over the dataset
                  logfiledir = '',  # filename to print log to
-                 a0=None):  # initial guess for the filters. default: empty
+                 a0=None,  # initial guess for the filters. default: empty
+                 useLossWeights=None):  # use weighted loss, loss types: {None, 'None', 'proportional'}
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -44,12 +45,19 @@ class CalibEstimator:
         self.updatedWeights = a0
         self.numEpochs = numEpochs
         self.logfiledir = logfiledir
+        if useLossWeights is None:
+            self.useLossWeights = 'None'
+        else:
+            self.useLossWeights = useLossWeights
+
 
         if self.logfiledir == '':
             self.logfiledir = './'
 
         if not isinstance(self.learningRate, list):
             self.learningRate = [self.learningRate]*self.numEpochs
+
+
 
         assert(len(self.learningRate) >= self.numEpochs)
 
@@ -76,8 +84,7 @@ class CalibEstimator:
         for fn in validFilenames:
             numValidExamples += sum([1 for record in tf.python_io.tf_record_iterator(fn)])
 
-        self.numExamples = {'train': numTrainingExamples * self.dims['NX'][0],
-                            'valid': numValidExamples * self.dims['NX'][0]}
+        self.numExamples = {'train': numTrainingExamples,'valid': numValidExamples}
 
     # createNPArraysDatasets
     # ----------------------
@@ -135,7 +142,23 @@ class CalibEstimator:
                                                       name='x_filtered')
 
         #loss function:
-        self.tensors['loss']=tf.losses.mean_squared_error(labels=self.tensors['y_GT'], predictions=self.tensors['y_est'])
+        if self.useLossWeights == 'None':
+            self.tensors['loss_weights'] = 1.0
+        elif self.useLossWeights == 'proportional':
+            minConvCoeffs = int((self.dims['NX'][1] + self.dims['NFilt']-1 - self.dims['NY'][1])/2)
+            weights_list = np.array(list(range(minConvCoeffs+1,self.dims['NX'][1])) +
+                                    [1]*(self.dims['NFilt'] - self.dims['NX'][1] + 1) +
+                                    list(range(self.dims['NX'][1]-1, minConvCoeffs, -1)), dtype=np.float32)
+            weights_list = weights_list / np.max(weights_list)
+            weights_list = weights_list.reshape((1, 1, weights_list.size, 1))
+            self.tensors['loss_weights'] = tf.constant(weights_list, tf.float32)
+        else:
+            print('useLossWeights: unknown option: ' + str(self.useLossWeights))
+            assert(0)
+
+        self.tensors['loss']=tf.losses.mean_squared_error(labels=self.tensors['y_GT'],
+                                                          predictions=self.tensors['y_est'],
+                                                          weights=self.tensors['loss_weights'])
 
     # function train
     # --------------
@@ -219,9 +242,6 @@ class CalibEstimator:
                     for _ in range(numBatchesValid):
                         loss_val = sess.run(self.tensors['loss'], feed_dict={self.tensors['db_handle']: valid_handle})
                         valid_loss += loss_val
-
-
-
 
 
                 # print loss:

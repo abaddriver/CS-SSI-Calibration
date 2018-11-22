@@ -28,9 +28,6 @@ def ConvertDatabaseToTFRecords(inFolder, outFolder, maxExamples=-1):
 
     # get the cube and dd file lists:
     sysdims = getSystemDimensions()
-    outFilePath = join(outFolder, 'ImageDB_DDW{}.tfrecords'.format(sysdims.DDx_new))
-    if isfile(outFilePath):
-        return outFilePath
 
     if not isdir(outFolder):
         mkdir(outFolder)
@@ -39,18 +36,26 @@ def ConvertDatabaseToTFRecords(inFolder, outFolder, maxExamples=-1):
                                  NCube=sysdims.NCube,
                                  NDD=sysdims.NDD,
                                  maxNExamples=maxExamples)
-    CubeFiles, DDFiles = dataCreator.getFileLists()
+    CubeFiles, DDFiles, Filenames = dataCreator.getFileLists()
 
     # crop dd image indices:
     x_dd_start = int((sysdims.NDD[1] - sysdims.DDx_new)/2)
     x_dd_end = x_dd_start + sysdims.DDx_new
 
-    # start reader and writer for inputs and output:
+    # start reader:
     imhand = SSIImageHandler()
+    # initialize output
+    outFiles = []
+
+    outFilePath = join(outFolder, 'database_DDW{}.tfrecords'.format(sysdims.DDx_new))
+    if isfile(outFilePath):
+        # add file to file list and continue:
+        return [outFilePath]
+
     writer = tf.python_io.TFRecordWriter(outFilePath)
 
     # iterate over all paths:
-    for cubepath,ddpath in zip(CubeFiles, DDFiles):
+    for cubepath,ddpath, filename in zip(CubeFiles, DDFiles, Filenames):
 
         # read images:
         cubeim = imhand.readImage(cubepath)
@@ -61,35 +66,34 @@ def ConvertDatabaseToTFRecords(inFolder, outFolder, maxExamples=-1):
         ddheight = ddim.shape[0]
         ddwidth = ddim.shape[1]
 
-        # convert images to string:
-        cube_raw = cubeim.tostring()
-        dd_raw = ddim.tostring()
+        for ii in range(cubeheight):
+            # convert image stripes to string:
+            cube_raw = cubeim[ii, :, :].tostring()
+            dd_raw = ddim[ii, :, :].tostring()
 
-        # create a feature:
-        example = tf.train.Example(features=tf.train.Features(feature={
-            'cubeheight': _int64_feature(cubeheight),
-            'cubewidth': _int64_feature(cubewidth),
-            'cubechannels': _int64_feature(cubechannels),
-            'ddheight': _int64_feature(ddheight),
-            'ddwidth': _int64_feature(ddwidth),
-            'Cube': _bytes_feature(cube_raw),
-            'DD': _bytes_feature(dd_raw)}))
+            # create a feature:
+            example = tf.train.Example(features=tf.train.Features(feature={
+                'cubewidth': _int64_feature(cubewidth),
+                'cubechannels': _int64_feature(cubechannels),
+                'ddwidth': _int64_feature(ddwidth),
+                'Cube': _bytes_feature(cube_raw),
+                'DD': _bytes_feature(dd_raw)}))
 
-        # write feature to file:
-        writer.write(example.SerializeToString())
+            # write feature to file:
+            writer.write(example.SerializeToString())
 
     # close file:
     writer.close()
 
-    return outFilePath
+    return [outFilePath]
 
 # utilities for ConvertTFRecordsToDatset:
+_sysdims = getSystemDimensions()
+
 def _get_tfrecords_features():
     return {
-        'cubeheight': tf.FixedLenFeature([1], tf.int64),
         'cubewidth': tf.FixedLenFeature([1], tf.int64),
         'cubechannels': tf.FixedLenFeature([1], tf.int64),
-        'ddheight': tf.FixedLenFeature([1], tf.int64),
         'ddwidth': tf.FixedLenFeature([1], tf.int64),
         'Cube': tf.FixedLenFeature([1], tf.string),
         'DD': tf.FixedLenFeature([1], tf.string)
@@ -101,13 +105,11 @@ def _feature_retrieval(serialized_example):
         features=_get_tfrecords_features()
     )
     # feature -> cube, dd
-    _cubeheight = tf.cast(features['cubeheight'], tf.int64)[0]
     _cubewidth = tf.cast(features['cubewidth'], tf.int64)[0]
     _cubechannels = tf.cast(features['cubechannels'], tf.int64)[0]
-    _ddheight = tf.cast(features['ddheight'], tf.int64)[0]
     _ddwidth = tf.cast(features['ddwidth'], tf.int64)[0]
-    cube = tf.reshape(tf.decode_raw(tf.cast(features['Cube'], tf.string)[0], tf.float32),(_cubeheight, _cubewidth, _cubechannels))
-    dd = tf.reshape(tf.decode_raw(tf.cast(features['DD'], tf.string)[0], tf.float32),(_ddheight, _ddwidth, 1))
+    cube = tf.reshape(tf.decode_raw(tf.cast(features['Cube'], tf.string)[0], tf.float32),(1, _sysdims.NCube[1], _sysdims.NCube[2])) #_cubewidth, _cubechannels))
+    dd = tf.reshape(tf.decode_raw(tf.cast(features['DD'], tf.string)[0], tf.float32),(1, _sysdims.DDx_new, 1))
 
     return cube, dd
 
@@ -130,7 +132,7 @@ def ConvertTFRecordsToDatset(handle, filesTrain, filesValid, batchSize, trainShu
     # Training data
     train_dataset = tf.data.TFRecordDataset(filesTrain)
     train_dataset = train_dataset.map(_feature_retrieval)
-    train_dataset = train_dataset.batch(batch_size=batchSize, drop_remainder=True)
+    train_dataset = train_dataset.batch(batch_size=batchSize)
     # shuffle train dataset:
     if trainShuffleBuffSize>0:
         train_dataset = train_dataset.shuffle(trainShuffleBuffSize, reshuffle_each_iteration=True)
@@ -138,7 +140,7 @@ def ConvertTFRecordsToDatset(handle, filesTrain, filesValid, batchSize, trainShu
     # Validation data
     valid_dataset = tf.data.TFRecordDataset(filesValid)
     valid_dataset = valid_dataset.map(_feature_retrieval)
-    valid_dataset = valid_dataset.batch(batch_size=batchSize, drop_remainder=True)
+    valid_dataset = valid_dataset.batch(batch_size=batchSize)
 
     # Initializable iterator
     iterator = tf.data.Iterator.from_string_handle(

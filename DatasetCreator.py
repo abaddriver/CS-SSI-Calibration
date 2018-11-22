@@ -47,13 +47,13 @@ class DatasetCreator:
         CubeList = list(map(lambda f: join(self.directory, f + '_Cube.rawImage'), filenames))
         DDList = list(map(lambda f: join(self.directory, f + '_DD.rawImage'), filenames))
 
-        return (CubeList, DDList)
+        return CubeList, DDList, filenames
 
     def buildDataset(self):
         print('DatasetCreator.buildDataset()')
 
         # get file lists:
-        (CubeList, DDList) = self.getFileLists()
+        (CubeList, DDList, Filenames) = self.getFileLists()
 
         # iterate over filenames and read Cube and DD images
         h = SSIImageHandler()
