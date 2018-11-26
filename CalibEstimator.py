@@ -25,7 +25,7 @@ class CalibEstimator:
                  numEpochs = 1, # number of times to go over the dataset
                  logfiledir = '',  # filename to print log to
                  a0=None,  # initial guess for the filters. default: empty
-                 useLossWeights=None):  # use weighted loss, loss types: {None, 'None', 'proportional', 'squared'}
+                 useLossWeights=None):  # use weighted loss, loss types: {None, 'None', 'proportional', 'squared', 'quad'}
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -144,14 +144,16 @@ class CalibEstimator:
         #loss function:
         if self.useLossWeights == 'None':
             self.tensors['loss_weights'] = 1.0
-        elif self.useLossWeights == 'proportional' or self.useLossWeights == 'squared':
+        elif self.useLossWeights == 'proportional' or self.useLossWeights == 'squared' or self.useLossWeights=='quad':
             minConvCoeffs = int((self.dims['NX'][1] + self.dims['NFilt']-1 - self.dims['NY'][1])/2)
             weights_list = np.array(list(range(minConvCoeffs+1,self.dims['NX'][1])) +
-                                    [1]*(self.dims['NFilt'] - self.dims['NX'][1] + 1) +
+                                    [self.dims['NX'][1]]*(self.dims['NFilt'] - self.dims['NX'][1] + 1) +
                                     list(range(self.dims['NX'][1]-1, minConvCoeffs, -1)), dtype=np.float32)
             weights_list = weights_list / np.max(weights_list)
             if self.useLossWeights == 'squared':
                 weights_list = np.square(weights_list)
+            if self.useLossWeights == 'quad':
+                weights_list = np.power(weights_list, 3)
 
             weights_list = weights_list.reshape((1, 1, weights_list.size, 1))
             self.tensors['loss_weights'] = tf.constant(weights_list, tf.float32)
