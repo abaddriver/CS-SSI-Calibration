@@ -25,7 +25,7 @@ class CalibEstimator:
                  numEpochs = 1, # number of times to go over the dataset
                  logfiledir = '',  # filename to print log to
                  a0=None,  # initial guess for the filters. default: empty
-                 useLossWeights=None):  # use weighted loss, loss types: {None, 'None', 'proportional'}
+                 useLossWeights=None):  # use weighted loss, loss types: {None, 'None', 'proportional', 'squared'}
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -144,12 +144,15 @@ class CalibEstimator:
         #loss function:
         if self.useLossWeights == 'None':
             self.tensors['loss_weights'] = 1.0
-        elif self.useLossWeights == 'proportional':
+        elif self.useLossWeights == 'proportional' or self.useLossWeights == 'squared':
             minConvCoeffs = int((self.dims['NX'][1] + self.dims['NFilt']-1 - self.dims['NY'][1])/2)
             weights_list = np.array(list(range(minConvCoeffs+1,self.dims['NX'][1])) +
                                     [1]*(self.dims['NFilt'] - self.dims['NX'][1] + 1) +
                                     list(range(self.dims['NX'][1]-1, minConvCoeffs, -1)), dtype=np.float32)
             weights_list = weights_list / np.max(weights_list)
+            if self.useLossWeights == 'squared':
+                weights_list = np.square(weights_list)
+
             weights_list = weights_list.reshape((1, 1, weights_list.size, 1))
             self.tensors['loss_weights'] = tf.constant(weights_list, tf.float32)
         else:
@@ -188,8 +191,12 @@ class CalibEstimator:
             logging.info("starting sessions:")
             logging.info("training size: {0}".format(self.numExamples['train']))
             logging.info("Validation size: {0}".format(self.numExamples['valid']))
+            logging.info('Cube dims: ({}, {}, {})'.format(self.dims['NX'][0], self.dims['NX'][1], self.dims['NX'][2]))
+            logging.info('DD dims: ({}, {})'.format(self.dims['NY'][0], self.dims['NY'][1]))
             logging.info("filter length: {0}, numFilters: {1}".format(self.dims['NFilt'], self.dims['L']))
+            logging.info('loss weights: ' + self.useLossWeights)
             logging.info("epochs: {0}".format(self.numEpochs))
+
             # init gloval variables and init
             sess.run(tf.global_variables_initializer())
 
