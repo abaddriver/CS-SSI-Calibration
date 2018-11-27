@@ -3,7 +3,7 @@ from os import mkdir
 from SSIImageHandler import SSIImageHandler
 import tensorflow as tf
 from DatasetCreator import DatasetCreator
-from SystemDimensions import getSystemDimensions
+from SystemSettings import getSystemDimensions
 
 # utilities for ConvertDatabaseToTFRecords:
 def _bytes_feature(value):

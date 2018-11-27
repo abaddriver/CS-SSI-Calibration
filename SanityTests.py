@@ -1,5 +1,5 @@
 import numpy as np
-import SystemDimensions
+import SystemSettings
 from CalibEstimator import CalibEstimator
 from SSIImageHandler import SSIImageHandler
 from DatasetCreator import DatasetCreator
@@ -9,7 +9,7 @@ from DatasetCreator import DatasetCreator
 ## this sanity test verifies that the model defined in CalibEstimator is correct
 def calibEstimatorSanityTest1():
     # define sizes for tests:
-    sysDims = SystemDimensions.getSystemDimensions()
+    sysDims = SystemSettings.getSystemDimensions()
     NCube = sysDims.NCube  # Cube [y, x, lambda] image size
     NDD = sysDims.NDD  # DD [y,x] image size
     NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter
@@ -56,7 +56,7 @@ def calibEstimatorSanityTest2_createData():
     trainDir = logfiledir + 'Train/'
 
     # define sizes for tests:
-    sysDims = SystemDimensions.getSystemDimensions()
+    sysDims = SystemSettings.getSystemDimensions()
     NCube = sysDims.NCube  # Cube [y, x, lambda] image size
     NDD = sysDims.NDD  # DD [y,x] image size
     NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter
@@ -109,7 +109,7 @@ def calibEstimatorSanityTest2():
     trainDir = logfiledir + 'Train/'
 
     # define sizes for tests:
-    sysDims = SystemDimensions.getSystemDimensions()
+    sysDims = SystemSettings.getSystemDimensions()
     NCube = sysDims.NCube  # Cube [y, x, lambda] image size
     NDD = sysDims.NDD  # DD [y,x] image size
     NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter

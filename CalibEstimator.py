@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import math
 import logging
-from datetime import datetime
+from os.path import join
 import time
 from SSIImageHandler import SSIImageHandler
 import SSITFRecordHandler as recordhandler
@@ -149,7 +149,8 @@ class CalibEstimator:
         #loss function:
         if self.useLossWeights == 'None':
             self.tensors['loss_weights'] = 1.0
-        elif self.useLossWeights == 'proportional' or self.useLossWeights == 'squared' or self.useLossWeights=='quad':
+
+        elif any([x == self.useLossWeights for x in ['proportional', 'squared', 'quad', 'exp']]):
             minConvCoeffs = int((self.dims['NX'][1] + self.dims['NFilt']-1 - self.dims['NY'][1])/2)
             weights_list = np.array(list(range(minConvCoeffs+1,self.dims['NX'][1])) +
                                     [self.dims['NX'][1]]*(self.dims['NFilt'] - self.dims['NX'][1] + 1) +
@@ -157,8 +158,11 @@ class CalibEstimator:
             weights_list = weights_list / np.max(weights_list)
             if self.useLossWeights == 'squared':
                 weights_list = np.square(weights_list)
-            if self.useLossWeights == 'quad':
+            elif self.useLossWeights == 'quad':
                 weights_list = np.power(weights_list, 3)
+            elif self.useLossWeights == 'exp':
+                weights_list = (weights_list - np.max(weights_list))*self.dims['NX'][1]/20
+                weights_list = np.exp(weights_list)
 
             weights_list = weights_list.reshape((1, 1, weights_list.size, 1))
             self.tensors['loss_weights'] = tf.constant(weights_list, tf.float32)
@@ -188,10 +192,14 @@ class CalibEstimator:
         optimizer = tf.train.GradientDescentOptimizer(self.tensors['learningRate'])
         trainOp = optimizer.minimize(self.tensors['loss'])
 
-        logfilename = datetime.now().strftime("%Y-%m-%d__%H-%M-%S")
-        logfilename = self.logfiledir + logfilename + '.log'
+        logfilename = join(self.logfiledir, 'trainlog.log')
 
         with tf.Session() as sess:
+
+            # remove old loggers if there are some:
+            log = logging.getLogger()
+            for hnd in log.handlers[:]:
+                log.removeHandler(hnd)
 
             # start log with basic info:
             logging.basicConfig(filename=logfilename, level=logging.DEBUG)
@@ -268,12 +276,12 @@ class CalibEstimator:
                 print(printstr)
                 logging.info(printstr)
 
-                if (epoch % 20) == 0:
+                if (epoch % 10) == 0:
                     # get calibration and save to file:
                     weights_var = tf.trainable_variables()[0]
                     self.updatedWeights = np.squeeze(sess.run(weights_var)).T
                     imHand = SSIImageHandler()
-                    imHand.writeImage(self.updatedWeights, self.logfiledir + "Filter_temp_epoch{}".format(epoch))
+                    imHand.writeImage(self.updatedWeights, join(self.logfiledir, "Filter_temp_epoch{}".format(epoch)))
 
             # save weights:
             weights_var = tf.trainable_variables()[0]
