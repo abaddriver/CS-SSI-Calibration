@@ -152,9 +152,12 @@ class CalibEstimator:
 
         elif any([x == self.useLossWeights for x in ['proportional', 'squared', 'quad', 'exp']]):
             minConvCoeffs = int((self.dims['NX'][1] + self.dims['NFilt']-1 - self.dims['NY'][1])/2)
-            weights_list = np.array(list(range(minConvCoeffs+1,self.dims['NX'][1])) +
-                                    [self.dims['NX'][1]]*(self.dims['NFilt'] - self.dims['NX'][1] + 1) +
-                                    list(range(self.dims['NX'][1]-1, minConvCoeffs, -1)), dtype=np.float32)
+            _maxCoeffs = min(self.dims['NX'][1], self.dims['NFilt'])
+            _peakLength = self.dims['NX'][1] + self.dims['NFilt'] - 1 - 2*(_maxCoeffs - 1)
+            weights_list = np.array(list(range(minConvCoeffs+1,_maxCoeffs)) +
+                                    [_maxCoeffs] * _peakLength +
+                                    list(range(_maxCoeffs-1, minConvCoeffs, -1)), dtype=np.float32)
+
             weights_list = weights_list / np.max(weights_list)
             if self.useLossWeights == 'squared':
                 weights_list = np.square(weights_list)

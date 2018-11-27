@@ -8,11 +8,13 @@ _NFilt_glob = DEFAULT_NFILT  # default number of coefficients for each wavelengt
 _MinConvCoeffs_glob = DEFAULT_MINCONVCOEFFS  # default minimum number of coefficients for equations
 
 def setNFilt(nfilt):
+    global _NFilt_glob
     if nfilt is not None:
         _NFilt_glob = nfilt
 
 
 def setMinConvCoeffs(MinConvCoeffs):
+    global _MinConvCoeffs_glob
     if MinConvCoeffs is not None:
         _MinConvCoeffs_glob = MinConvCoeffs
 
@@ -23,6 +25,10 @@ def getSystemDimensions():
     NFilt = _NFilt_glob  # number of coefficients for each wavelength
     MinConvCoeffs = _MinConvCoeffs_glob  # minimum number of nonzero coefficients for each convolution output
     DDx_new = NCube[1] + NFilt - 1 - 2*MinConvCoeffs
+    if MinConvCoeffs > min(NFilt, NCube[1]):
+        print('getSystemDimensions: system dimensions error: MinConvCoeffs > min(NFilt, NCube[1])')
+        assert(0)
+
     sysDims = SystemDimensions(NCube=NCube, NDD=NDD, NFilt=NFilt, MinConvCoeffs=MinConvCoeffs, DDx_new=DDx_new)
     return sysDims
 
