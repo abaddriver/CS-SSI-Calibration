@@ -126,20 +126,25 @@ class CalibEstimator:
             self.a0_ndarr=np.array(self.a0).T.reshape((1, self.dims['NFilt'], 1, self.dims['L']))
             kernelInit=tf.constant_initializer(self.a0_ndarr)
 
+        # network:
         # find the padded value to match the output width:
         paddW = int((self.dims['NY'][1] - self.dims['NX'][1])/2)
+        padding = 'same'
+        if paddW < 0:
+            paddW = int((self.dims['NY'][1] + self.dims['NFilt'] - 1 - self.dims['NX'][1]) / 2)
+            padding = 'valid'
 
-        # network:
         self.tensors['x_padded'] = tf.pad(self.tensors['x'], [[0, 0], [0, 0], [paddW, paddW], [0, 0]], "CONSTANT")
         # convolutional layer:
         self.tensors['y_est'] = tf.layers.conv2d(inputs=self.tensors['x_padded'],
-                                                      filters=1,
-                                                      kernel_size=(1, self.dims['NFilt']),
-                                                      kernel_initializer=kernelInit,
-                                                      padding = 'same',
-                                                      activation=None,
-                                                      use_bias=False,
-                                                      name='x_filtered')
+                                                     filters=1,
+                                                     kernel_size=(1, self.dims['NFilt']),
+                                                     kernel_initializer=kernelInit,
+                                                     padding=padding,
+                                                     activation=None,
+                                                     use_bias=False,
+                                                     name='x_filtered')
+
 
         #loss function:
         if self.useLossWeights == 'None':
