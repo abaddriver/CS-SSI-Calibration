@@ -7,6 +7,7 @@ import time
 from SSIImageHandler import SSIImageHandler
 import SSITFRecordHandler as recordhandler
 
+_WEIGHT_EXPONENTIAL_DROP = 20  # number of coefficients difference for drop by e in loss weights
 
 # Class CalibEstimator
 # -------------
@@ -162,9 +163,9 @@ class CalibEstimator:
             if self.useLossWeights == 'squared':
                 weights_list = np.square(weights_list)
             elif self.useLossWeights == 'quad':
-                weights_list = np.power(weights_list, 3)
+                weights_list = np.power(weights_list, 4)
             elif self.useLossWeights == 'exp':
-                weights_list = (weights_list - np.max(weights_list))*self.dims['NX'][1]/20
+                weights_list = (weights_list - np.max(weights_list))*_maxCoeffs/_WEIGHT_EXPONENTIAL_DROP
                 weights_list = np.exp(weights_list)
 
             weights_list = weights_list.reshape((1, 1, weights_list.size, 1))
