@@ -26,7 +26,8 @@ class CalibEstimator:
                  numEpochs = 1, # number of times to go over the dataset
                  logfiledir = '',  # filename to print log to
                  a0=None,  # initial guess for the filters. default: empty
-                 useLossWeights=None):  # use weighted loss, loss types: {None, 'None', 'proportional', 'squared', 'quad'}
+                 useLossWeights=None,  # use weighted loss, loss types: {None, 'None', 'proportional', 'squared', 'quad'}
+                 lossFunc=None):  # loss functions: {None, 'l2_loss', 'l1_loss'}, default and None results in 'l2_loss'
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -58,9 +59,12 @@ class CalibEstimator:
         if not isinstance(self.learningRate, list):
             self.learningRate = [self.learningRate]*self.numEpochs
 
-
-
         assert(len(self.learningRate) >= self.numEpochs)
+
+        if lossFunc is None:
+            self.lossFunc = 'l2_loss'
+        else:
+            self.lossFunc = lossFunc
 
     # createTFRecordDatasets
     # ----------------------
@@ -173,10 +177,14 @@ class CalibEstimator:
         else:
             print('useLossWeights: unknown option: ' + str(self.useLossWeights))
             assert(0)
-
-        self.tensors['loss']=tf.losses.mean_squared_error(labels=self.tensors['y_GT'],
+        if self.lossFunc == 'l2_loss':
+            self.tensors['loss']=tf.losses.mean_squared_error(labels=self.tensors['y_GT'],
                                                           predictions=self.tensors['y_est'],
                                                           weights=self.tensors['loss_weights'])
+        elif self.lossFunc == 'l1_loss':
+            self.tensors['loss'] = tf.losses.absolute_difference(labels=self.tensors['y_GT'],
+                                                                predictions=self.tensors['y_est'],
+                                                                weights=self.tensors['loss_weights'])
 
     # function train
     # --------------

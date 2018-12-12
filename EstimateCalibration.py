@@ -14,11 +14,12 @@ debug_tests = 0
 # use tfrecords - tests show it doesnt speed up
 use_tfrecords = False
 
-filterSizes = list(range(21,301,50)) + [301]
+filterSizes = list(range(21, 300, 50)) + [301, 351]
 #filterSizes = [301]
-lossWeights = ['quad', 'exp']  # {None, 'None', 'proportional', 'squared', 'quad', 'exp'}
+lossWeights = ['None', 'proportional', 'squared', 'quad', 'exp']  # {None, 'None', 'proportional', 'squared', 'quad', 'exp'}
 # lossWeights = ['exp']
-minConvCoeffs = [0]
+allminConvCoeffs = [0]
+loss_functions = ['l1_loss']
 
 testfoldername = 'Est_' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # paths:
@@ -29,7 +30,7 @@ validPath = sysPaths.validPath
 calibOutputBaseDir = join(sysPaths.outputBaseDir, testfoldername)
 mkdir(calibOutputBaseDir)
 
-for (filtsize, lossWeights, minConvCoeffs) in itertools.product(filterSizes, lossWeights, minConvCoeffs):
+for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(filterSizes, lossWeights, allminConvCoeffs, loss_functions):
 
     if debug_tests == 1:
         maxNExamples = 10
@@ -38,7 +39,7 @@ for (filtsize, lossWeights, minConvCoeffs) in itertools.product(filterSizes, los
     else:
         maxNExamples = -1
         numEpochs = 100
-        batchSize = 100
+        batchSize = 200
 
     # sizes:
     # set defined sizes:
@@ -51,7 +52,7 @@ for (filtsize, lossWeights, minConvCoeffs) in itertools.product(filterSizes, los
     DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 300
 
     # paths:
-    calibOutputDir = join(calibOutputBaseDir, 'NFilt_{}_weights_{}_DDW_{}'.format(filtsize, lossWeights, DDx_new))
+    calibOutputDir = join(calibOutputBaseDir, 'NFilt_{}_weights_{}_DDW_{}_{}'.format(filtsize, lossWeights, DDx_new, loss_function))
     mkdir(calibOutputDir)
     calibOutputPath = join(calibOutputDir, 'outputFilters.rawImage')
 
@@ -85,7 +86,8 @@ for (filtsize, lossWeights, minConvCoeffs) in itertools.product(filterSizes, los
                           batchSize=batchSize,
                           numEpochs=numEpochs,
                           logfiledir=calibOutputDir,
-                          useLossWeights=lossWeights)
+                          useLossWeights=lossWeights,
+                          lossFunc=loss_function)
 
     if use_tfrecords:
         cEst.createTFRecordDatasets(trainFilenames=trainFilePaths, validFilenames=validFilePaths)
