@@ -8,6 +8,7 @@ from SSIImageHandler import SSIImageHandler
 import SSITFRecordHandler as recordhandler
 
 _WEIGHT_EXPONENTIAL_DROP = 20  # number of coefficients difference for drop by e in loss weights
+_SHUFFLE_BUFFER_SIZE = 10000  # number of examples to be randomized each time
 
 # Class CalibEstimator
 # -------------
@@ -105,6 +106,7 @@ class CalibEstimator:
         # dataset:
         self.tensors['train_dataset'] = tf.data.Dataset.from_tensor_slices(
             (self.tensors['x_data'], self.tensors['y_data_GT'])). \
+            shuffle(_SHUFFLE_BUFFER_SIZE). \
             repeat(self.numEpochs).batch(self.batchSize)
         self.tensors['valid_dataset'] = tf.data.Dataset.from_tensor_slices(
             (self.tensors['x_data'], self.tensors['y_data_GT'])). \
