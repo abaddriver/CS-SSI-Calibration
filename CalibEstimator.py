@@ -27,8 +27,10 @@ class CalibEstimator:
                  numEpochs = 1, # number of times to go over the dataset
                  logfiledir = '',  # filename to print log to
                  a0=None,  # initial guess for the filters. default: empty
-                 useLossWeights=None,  # use weighted loss, loss types: {None, 'None', 'proportional', 'squared', 'quad'}
-                 lossFunc=None):  # loss functions: {None, 'l2_loss', 'l1_loss'}, default and None results in 'l2_loss'
+                 useLossWeights=None,  # use weighted loss, loss types: {None,'None','proportional','squared','quad'}
+                 lossFunc=None,  # loss functions: {None, 'l2_loss', 'l1_loss'}, default and None results in 'l2_loss'
+                 regularizationFactor=0.001,  # regularization factor, to be used if loss contains regularization
+                 optimizer=None):  # optimizers: {'adam', 'gd'}
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -66,6 +68,16 @@ class CalibEstimator:
             self.lossFunc = 'l2_loss'
         else:
             self.lossFunc = lossFunc
+
+        self.regularizationFactor = regularizationFactor
+        # if optimizer is not specified, set it according to the loss:
+        if optimizer is None:
+            if 'l1_loss' in self.lossFunc:
+                self.optimizer = 'adam'
+            else:
+                self.optimizer = 'gd'
+        else:
+            self.optimizer = optimizer
 
     # createTFRecordDatasets
     # ----------------------
@@ -179,14 +191,23 @@ class CalibEstimator:
         else:
             print('useLossWeights: unknown option: ' + str(self.useLossWeights))
             assert(0)
-        if self.lossFunc == 'l2_loss':
+
+        # general error loss:
+        if 'l2_loss' in self.lossFunc:
             self.tensors['loss']=tf.losses.mean_squared_error(labels=self.tensors['y_GT'],
                                                           predictions=self.tensors['y_est'],
                                                           weights=self.tensors['loss_weights'])
-        elif self.lossFunc == 'l1_loss':
+        elif 'l1_loss' in self.lossFunc:
             self.tensors['loss'] = tf.losses.absolute_difference(labels=self.tensors['y_GT'],
                                                                 predictions=self.tensors['y_est'],
                                                                 weights=self.tensors['loss_weights'])
+
+        # regularization error loss:
+        if 'reg' in self.lossFunc:
+            # get the weights:
+            weights_var = tf.trainable_variables()[0]
+            if 'l2reg' in self.lossFunc:
+                self.tensors['loss'] = self.tensors['loss'] + self.regularizationFactor * tf.nn.l2_loss(weights_var)
 
     # function train
     # --------------
@@ -202,8 +223,12 @@ class CalibEstimator:
         if DBtype == 'NPArray':
             self.numExamples = {'train': DBargs['Xtrain'].shape[0], 'valid': DBargs['Xvalid'].shape[0]}
 
+         # set the optimizer and training operation:
         self.tensors['learningRate'] = tf.placeholder(tf.float32, shape=[])
-        optimizer = tf.train.GradientDescentOptimizer(self.tensors['learningRate'])
+        if self.optimizer == 'gd':
+            optimizer = tf.train.GradientDescentOptimizer(self.tensors['learningRate'])
+        else:
+            optimizer = tf.train.AdamOptimizer(self.tensors['learningRate'])
         trainOp = optimizer.minimize(self.tensors['loss'])
 
         logfilename = join(self.logfiledir, 'trainlog.log')
@@ -281,7 +306,6 @@ class CalibEstimator:
 
 
                 # print loss:
-
                 dur = time.time() - start
                 printstr = "Iter: {0}, time: {1:.4f}, TrainLoss: {2:.4f}, ValidLoss: {3:.4f}".format(epoch,
                                                                                                      dur,
@@ -300,43 +324,6 @@ class CalibEstimator:
             # save weights:
             weights_var = tf.trainable_variables()[0]
             self.updatedWeights = np.squeeze(sess.run(weights_var)).T
-
-    # run a forward pass:
-    def forwardPass(self, X):
-        print('CalibEstimator.forwardPass()')
-
-        Y = np.zeros((X.shape[0], 1, self.dims['NY'][1], 1), np.float32)
-
-        assert(self.batchSize == 1)
-        numBatches = int(X.shape[0] / self.batchSize)
-
-        with tf.Session() as sess:
-            
-            sess.run(tf.global_variables_initializer())
-            sess.run(self.tensors['valid_init_op'], feed_dict={self.tensors['x_data']: X,
-                                                               self.tensors['y_data_GT']: Y})
-
-            for ii in range(numBatches):
-                y_est = sess.run(self.tensors['y_est'])
-                Y[ii, :, :, :] = y_est
-        return Y
-
-    def CalcLoss(self, X, Y):
-        print('CalibEstimator.CalcLoss()')
-
-        loss = 0
-        numBatches = int(math.floor(X.shape[0] / self.batchSize))
-
-        with tf.Session() as sess:
-
-            sess.run(tf.global_variables_initializer())
-            sess.run(self.tensors['valid_init_op'], feed_dict={self.tensors['x_data']: X,
-                                                               self.tensors['y_data_GT']: Y})
-
-            for _ in range(numBatches):
-                loss_val = sess.run(self.tensors['loss'])
-                loss += loss_val
-        return loss
 
     def getCalibratedWeights(self):
         print('CalibEstimator.getCalibratedWeights()')

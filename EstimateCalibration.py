@@ -14,12 +14,11 @@ debug_tests = 0
 # use tfrecords - tests show it doesnt speed up
 use_tfrecords = False
 
-filterSizes = list(range(21, 300, 50)) + [301, 351]
+allFilterSizes = [301, 351]  # + list(range(21, 300, 50))
 #filterSizes = [301]
-lossWeights = ['None', 'proportional', 'squared', 'quad', 'exp']  # {None, 'None', 'proportional', 'squared', 'quad', 'exp'}
-# lossWeights = ['exp']
+allLossWeights = ['proportional', 'squared', 'quad', 'exp', 'None']  # {None, 'None', 'proportional', 'squared', 'quad', 'exp'}
 allminConvCoeffs = [0]
-loss_functions = ['l1_loss']
+allLossfunctions = ['l1_loss_l2reg']  # {'l1_loss', 'l2_loss'} x {'_l2reg', ''}
 
 testfoldername = 'Est_' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # paths:
@@ -30,7 +29,7 @@ validPath = sysPaths.validPath
 calibOutputBaseDir = join(sysPaths.outputBaseDir, testfoldername)
 mkdir(calibOutputBaseDir)
 
-for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(filterSizes, lossWeights, allminConvCoeffs, loss_functions):
+for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(allFilterSizes, allLossWeights, allminConvCoeffs, allLossfunctions):
 
     if debug_tests == 1:
         maxNExamples = 10
@@ -39,7 +38,7 @@ for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(f
     else:
         maxNExamples = -1
         numEpochs = 100
-        batchSize = 200
+        batchSize = 100
 
     # sizes:
     # set defined sizes:
