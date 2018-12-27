@@ -14,11 +14,12 @@ debug_tests = 0
 # use tfrecords - tests show it doesnt speed up
 use_tfrecords = False
 
-allFilterSizes = [301, 351]  # + list(range(21, 300, 50))
-#filterSizes = [301]
-allLossWeights = ['proportional', 'squared', 'quad', 'exp', 'None']  # {None, 'None', 'proportional', 'squared', 'quad', 'exp'}
-allminConvCoeffs = [0]
+allFilterSizes = [351]  # [301, 351] + list(range(21, 300, 50))
+allLossWeights = ['quad', 'exp', 'None']  # {None, 'None', 'proportional', 'squared', 'quad', 'exp'}
 allLossfunctions = ['l1_loss_l2reg']  # {'l1_loss', 'l2_loss'} x {'_l2reg', ''}
+allRegFactors = [1e-4, 1e-5, 1e-6]
+
+minConvCoeffs = 0
 
 testfoldername = 'Est_' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # paths:
@@ -29,7 +30,7 @@ validPath = sysPaths.validPath
 calibOutputBaseDir = join(sysPaths.outputBaseDir, testfoldername)
 mkdir(calibOutputBaseDir)
 
-for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(allFilterSizes, allLossWeights, allminConvCoeffs, allLossfunctions):
+for (filtsize, lossWeights, loss_function, regFactor) in itertools.product(allFilterSizes, allLossWeights, allLossfunctions, allRegFactors):
 
     if debug_tests == 1:
         maxNExamples = 10
@@ -51,7 +52,7 @@ for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(a
     DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 300
 
     # paths:
-    calibOutputDir = join(calibOutputBaseDir, 'NFilt_{}_weights_{}_DDW_{}_{}'.format(filtsize, lossWeights, DDx_new, loss_function))
+    calibOutputDir = join(calibOutputBaseDir, 'NFilt_{}_weights_{}_DDW_{}_{}_regFactor_{}'.format(filtsize, lossWeights, DDx_new, loss_function, regFactor))
     mkdir(calibOutputDir)
     calibOutputPath = join(calibOutputDir, 'outputFilters.rawImage')
 
@@ -86,7 +87,8 @@ for (filtsize, lossWeights, minConvCoeffs, loss_function) in itertools.product(a
                           numEpochs=numEpochs,
                           logfiledir=calibOutputDir,
                           useLossWeights=lossWeights,
-                          lossFunc=loss_function)
+                          lossFunc=loss_function,
+                          regularizationFactor=regFactor)
 
     if use_tfrecords:
         cEst.createTFRecordDatasets(trainFilenames=trainFilePaths, validFilenames=validFilePaths)
