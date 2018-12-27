@@ -1,6 +1,6 @@
 from DatasetCreator import DatasetCreator
 from CalibEstimator import CalibEstimator
-from SSIImageHandler import SSIImageHandler
+import SSIImageHandler as imhand
 import SSITFRecordHandler as recordhandler
 from datetime import datetime
 import SystemSettings
@@ -102,8 +102,7 @@ for (filtsize, lossWeights, loss_function, regFactor) in itertools.product(allFi
 
     # get calibration and save to file:
     calibRes = cEst.getCalibratedWeights()
-    imHand = SSIImageHandler()
-    imHand.writeImage(calibRes, calibOutputPath)
+    imhand.writeImage(calibRes, calibOutputPath)
 
     # make new estimation available:
     tf.reset_default_graph()

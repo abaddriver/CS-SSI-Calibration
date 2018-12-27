@@ -1,6 +1,6 @@
 from os.path import join, isfile, isdir
 from os import mkdir
-from SSIImageHandler import SSIImageHandler
+import SSIImageHandler as imhand
 import tensorflow as tf
 from DatasetCreator import DatasetCreator
 from SystemSettings import getSystemDimensions
@@ -42,8 +42,6 @@ def ConvertDatabaseToTFRecords(inFolder, outFolder, maxExamples=-1):
     x_dd_start = int((sysdims.NDD[1] - sysdims.DDx_new)/2)
     x_dd_end = x_dd_start + sysdims.DDx_new
 
-    # start reader:
-    imhand = SSIImageHandler()
     # initialize output
     outFiles = []
 

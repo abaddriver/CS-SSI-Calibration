@@ -4,7 +4,7 @@ import math
 import logging
 from os.path import join
 import time
-from SSIImageHandler import SSIImageHandler
+import SSIImageHandler as imhand
 import SSITFRecordHandler as recordhandler
 
 _WEIGHT_EXPONENTIAL_DROP = 20  # number of coefficients difference for drop by e in loss weights
@@ -318,8 +318,7 @@ class CalibEstimator:
                     # get calibration and save to file:
                     weights_var = tf.trainable_variables()[0]
                     self.updatedWeights = np.squeeze(sess.run(weights_var)).T
-                    imHand = SSIImageHandler()
-                    imHand.writeImage(self.updatedWeights, join(self.logfiledir, "Filter_temp_epoch{}".format(epoch)))
+                    imhand.writeImage(self.updatedWeights, join(self.logfiledir, "Filter_temp_epoch{}".format(epoch)))
 
             # save weights:
             weights_var = tf.trainable_variables()[0]

@@ -1,7 +1,7 @@
 import numpy as np
 import SystemSettings
 from CalibEstimator import CalibEstimator
-from SSIImageHandler import SSIImageHandler
+import SSIImageHandler as imhand
 from DatasetCreator import DatasetCreator
 
 
@@ -81,25 +81,23 @@ def calibEstimatorSanityTest2_createData():
     DD_valid = cEst.forwardPass(Cube_valid)
 
     # save results:
-    imHand = SSIImageHandler()
-
-    # save filters:
+    # filters:
     filters_str =  logfiledir + 'filters_GT.rawImage'
-    imHand.writeImage(Filts_GT, filters_str)
+    imhand.writeImage(Filts_GT, filters_str)
 
     # save training data:
     for ii in range(numTrainExamples):
         cube_str = trainDir + 'Img_{}_Cube.rawImage'.format(ii)
         DD_str = trainDir + 'Img_{}_DD.rawImage'.format(ii)
-        imHand.writeImage(np.squeeze(Cube_train[ii*256:(ii+1)*256, :, :, :]), cube_str)
-        imHand.writeImage(np.squeeze(DD_train[ii * 256:(ii + 1) * 256, :, :, :]), DD_str)
+        imhand.writeImage(np.squeeze(Cube_train[ii*256:(ii+1)*256, :, :, :]), cube_str)
+        imhand.writeImage(np.squeeze(DD_train[ii * 256:(ii + 1) * 256, :, :, :]), DD_str)
 
     # save validation data:
     for ii in range(numValidExamples):
         cube_str = validDir + 'Img_{}_Cube.rawImage'.format(ii)
         DD_str = validDir + 'Img_{}_DD.rawImage'.format(ii)
-        imHand.writeImage(np.squeeze(Cube_valid[ii*256:(ii+1)*256, :, :, :]), cube_str)
-        imHand.writeImage(np.squeeze(DD_valid[ii * 256:(ii + 1) * 256, :, :, :]), DD_str)
+        imhand.writeImage(np.squeeze(Cube_valid[ii*256:(ii+1)*256, :, :, :]), cube_str)
+        imhand.writeImage(np.squeeze(DD_valid[ii * 256:(ii + 1) * 256, :, :, :]), DD_str)
 
 
 ## sanity test 2: train a network from a sinthesized random data and compare to the known filters
@@ -117,8 +115,6 @@ def calibEstimatorSanityTest2():
     NChannels = NCube[2]
     NDD[1] = DDx_new # directly use DDx_new instead of the original size which is too big
 
-    imHand = SSIImageHandler()
-
     # get train database
     myCreator = DatasetCreator(trainDir, NCube=NCube, NDD=NDD, maxNExamples=-1)
     train_database = myCreator.getDataset()
@@ -128,7 +124,7 @@ def calibEstimatorSanityTest2():
     valid_database = myCreator.getDataset()
     NDD[1] = DDx_new
 
-    Filts_GT = imHand.readImage(logfiledir + 'filters_GT.rawImage')
+    Filts_GT = imhand.readImage(logfiledir + 'filters_GT.rawImage')
 
     # run a training network and check the output weights
     # estimate calibration:
@@ -147,8 +143,8 @@ def calibEstimatorSanityTest2():
 
 
     Filts_Calib = cEst.getCalibratedWeights()
-    imHand.writeImage(Filts_Calib, logfiledir + 'sanity_test_2_Filters_Calib.rawImage')
-    imHand.writeImage(Filts_GT, logfiledir + 'sanity_test_2_Filters_GT.rawImage')
+    imhand.writeImage(Filts_Calib, logfiledir + 'sanity_test_2_Filters_Calib.rawImage')
+    imhand.writeImage(Filts_GT, logfiledir + 'sanity_test_2_Filters_GT.rawImage')
 
 
     diff = np.linalg.norm(np.subtract(np.squeeze(Filts_Calib), np.squeeze(Filts_GT)), ord='fro')

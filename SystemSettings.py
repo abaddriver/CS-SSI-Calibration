@@ -42,6 +42,11 @@ def getSystemPaths(system='Server'):
         validPath = '/home/amiraz/Documents/CS SSI/ImageDatabase/Valid'
         testPath = '/home/amiraz/Documents/CS SSI/ImageDatabase/Test'
         outputBaseDir = '/home/amiraz/Documents/CS SSI/CalibOutputs'
+    elif system=='AmirLaptop':
+        trainPath = 'C:/Users/Amir/Documents/CS SSI/ImageDatabase/Train'
+        validPath = 'C:/Users/Amir/Documents/CS SSI/ImageDatabase/Valid'
+        testPath = 'C:/Users/Amir/Documents/CS SSI/ImageDatabase/Test'
+        outputBaseDir = 'C:/Users/Amir/Documents/CS SSI/test'
 
     sysPaths = SystemPaths(outputBaseDir=outputBaseDir, trainPath=trainPath, validPath=validPath, testPath=testPath)
     return sysPaths

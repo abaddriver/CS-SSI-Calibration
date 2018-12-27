@@ -1,4 +1,4 @@
-from SSIImageHandler import SSIImageHandler
+import SSIImageHandler as imhand
 import numpy as np
 from os import listdir
 from os.path import isfile, join
@@ -15,11 +15,14 @@ class DatasetCreator:
                  directory,
                  NCube, # the dimensions of the spectral cube as [Nx, Ny, L] format
                  NDD,# the dimensions of the DD image, as [Nx, Ny] format
-                 maxNExamples = -1): # for testing: if specified, dataset will contain a maximum of maxNExamples images
+                 maxNExamples = -1,  # for testing: if specified, dataset will contain a maximum of maxNExamples images
+                 FiltersSynthetic=None):  # if specified, DD image is composed with these filters instead of real data
+
         print('DatasetCreator.__init__()')
         self.filenames = {}
         self.dataset = {}
         self.maxNExamples = maxNExamples
+        self.FiltersSynthetic = FiltersSynthetic
 
         if NDD[0] != NCube[0]:
             print('Error: DatasetCreator init(): Cube and DD image differ in height')
@@ -27,9 +30,16 @@ class DatasetCreator:
         else:
             self.directory = directory
             self.NCube = tuple(NCube)
-            self.NDD = tuple(NDD)
             self.DDx_cropInds = (0, NDD[1])
             self.DDx_crop = NDD[1]
+
+            if self.FiltersSynthetic is None:
+                self.NDD = tuple(NDD)
+            else:
+                NFilt = self.FiltersSynthetic.shape[1]
+                NDDtemp = list(NDD)
+                NDDtemp[1] = self.NCube[1] + NFilt - 1
+                self.NDD = tuple(NDDtemp)
 
     def getFileLists(self):
         print('DatasetCreator.getFileLists()')
@@ -56,15 +66,19 @@ class DatasetCreator:
         (CubeList, DDList, Filenames) = self.getFileLists()
 
         # iterate over filenames and read Cube and DD images
-        h = SSIImageHandler()
+
         self.filenames = []
         h_index_start = 0
         Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=float)
         DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1])
 
         for cubepath, ddpath in zip(CubeList, DDList):
-            cube = h.readImage(cubepath)
-            ddIm = h.readImage(ddpath)
+            cube = imhand.readImage(cubepath)
+
+            if self.FiltersSynthetic is None:
+                ddIm = imhand.readImage(ddpath)
+            else:
+                ddIm = imhand.filterImageLines(cube, self.FiltersSynthetic)
 
             #  check that image dimensions match the specification
             # if it does, inset to database
