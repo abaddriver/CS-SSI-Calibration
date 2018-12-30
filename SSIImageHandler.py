@@ -2,8 +2,10 @@ import numpy as np
 import struct
 from matplotlib import pyplot as plt
 from array import array
+from scipy import signal
 
 def readImage(imagePath):
+    # read image from path using SSI special format
     with open(imagePath, "rb") as fin:
         imsize = struct.unpack('iii', fin.read(3*4))
         imtype = str(fin.read(10*1))
@@ -11,6 +13,10 @@ def readImage(imagePath):
     return retIm
 
 def writeImage(imArr, imagePath):
+    # write image to path using SSI special format
+    # inputs:
+    #   imArr -     numpy ND array of up to 3 dimensions
+    #   imagePath - path to save image in
     imsize = [1,1,1]
     dims = imArr.shape
     for ii in range(min(len(dims), 3)):
@@ -46,16 +52,23 @@ def filterImageLines(inIm, Filt):
     # make padded input:
     inImPad = np.pad(inIm, [(0,0), (pad_size, pad_size), (0,0)], 'constant', constant_values=(0, 0))
     # allocate output:
-    outIm = np.zeros([inIm.shape[0], convSize])
+    outIm = np.zeros([inIm.shape[0], convSize], dtype=np.float32)
 
     # convolution manualy by channel:
-    for ii in range(Height):  # go over height of input image
-        for kk in range(L):  # go over each color channel
-            outIm[ii, :] = outIm[ii, :] + \
-                        np.convolve(np.squeeze(inImPad[ii, :, kk]), np.flip(np.squeeze(Filt[kk, :])), 'same')
+    for kk in range(L):  # go over each color channel
+        outIm = outIm + \
+                       signal.correlate2d(np.squeeze(inImPad[:, :, kk]), np.reshape(Filt[kk, :], (1,-1)), 'same')
 
     return outIm
 
+
+
+def addGaussianNoise(inIm, sigmaPrecentage):
+    # add gaussian noise to image
+    # noise has 0 mean and variance proportional to the image mean
+    sigma = sigmaPrecentage * np.mean(inIm)
+    inIm = inIm + np.random.normal(0.0, sigma, inIm.shape)
+    return inIm
 
 def visualizeImageGray(Im, layer=-1):
     if layer >= 0:
@@ -66,4 +79,3 @@ def visualizeImageGray(Im, layer=-1):
     plt.imshow(Im2, cmap='gray', interpolation='bilinear')
     plt.xticks([]), plt.yticks([])  # to hide tick values on X and Y axis
     plt.show()
-
