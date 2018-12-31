@@ -72,13 +72,19 @@ class DatasetCreator:
         Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=float)
         DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1])
 
-        for cubepath, ddpath in zip(CubeList, DDList):
+        for cubepath, ddpath, in zip(CubeList, DDList):
             cube = imhand.readImage(cubepath)
 
             if self.FiltersSynthetic is None:
                 ddIm = imhand.readImage(ddpath)
             else:
-                ddIm = imhand.filterImageLines(cube, self.FiltersSynthetic)
+                ddSynthName = ddpath.replace('.rawImage', 'Synth.rawImage')
+                if isfile(ddSynthName):
+                    ddIm = imhand.readImage(ddSynthName)
+                else:
+                    ddIm = imhand.filterImageLines(cube, self.FiltersSynthetic)
+                    # write dd image to path:
+                    imhand.writeImage(ddIm, ddSynthName)
 
             #  check that image dimensions match the specification
             # if it does, inset to database
