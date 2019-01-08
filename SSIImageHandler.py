@@ -79,3 +79,30 @@ def visualizeImageGray(Im, layer=-1):
     plt.imshow(Im2, cmap='gray', interpolation='bilinear')
     plt.xticks([]), plt.yticks([])  # to hide tick values on X and Y axis
     plt.show()
+
+def visualizeFilters(Filts, lambdaInds=None):
+    # show filters as plots
+    # inputs:
+    #   Filts -         a list, containing 2 dimensional ndarrays, each one is a set of filters
+    #                   (one for each frequency).
+    #   lambdaInds -    a list, containing the indices of the frequencies to plot.
+
+    # default lambdas: one's with the highest energy
+    if lambdaInds == None:
+        lambdaInds = [6, 15, 22]
+
+    plt.figure()
+    numPlots = len(lambdaInds)
+    plotInd = 1;
+
+    for lambdaInd in lambdaInds:
+        plt.subplot(numPlots, 1, plotInd)
+        for F in Filts:
+            assert((F.shape[1] % 2) == 1)
+            ext_x = int((F.shape[1] - 1)/2)
+            xx = np.array(range(-1*ext_x, ext_x + 1), np.float32)
+            yy = np.squeeze(F[lambdaInd, :])
+            plt.plot(xx, yy)
+        plotInd = plotInd + 1
+
+
