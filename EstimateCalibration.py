@@ -7,7 +7,6 @@ import SystemSettings
 import itertools
 from os.path import join
 from os import mkdir
-import tensorflow as tf
 
 # debug or actual run?
 debug_tests = 0
@@ -105,4 +104,4 @@ for (filtsize, lossWeights, loss_function, regFactor) in itertools.product(allFi
     imhand.writeImage(calibRes, calibOutputPath)
 
     # make new estimation available:
-    tf.reset_default_graph()
+    cEst.resetModel()

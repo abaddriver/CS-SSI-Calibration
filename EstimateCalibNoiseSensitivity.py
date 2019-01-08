@@ -6,7 +6,6 @@ import SystemSettings
 import itertools
 from os.path import join
 from os import mkdir
-import tensorflow as tf
 import numpy as np
 
 
@@ -123,4 +122,4 @@ for (noiseSigma, noiseReceivers) in itertools.product(AllNoiseSigmas, AllNoiseRe
     calib_diffs.append(np.sum(np.square((calibRes - F_orig[:, ind_begin:ind_end]))))
 
     # make new estimation available:
-    tf.reset_default_graph()
+    cEst.resetModel()

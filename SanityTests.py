@@ -3,6 +3,7 @@ import SystemSettings
 from CalibEstimator import CalibEstimator
 import SSIImageHandler as imhand
 from DatasetCreator import DatasetCreator
+from os.path import join
 
 
 ## sanity test 1: create a random filter and Cube, Generate DD and check the loss:
@@ -11,7 +12,7 @@ def calibEstimatorSanityTest1():
     # define sizes for tests:
     sysDims = SystemSettings.getSystemDimensions()
     NCube = sysDims.NCube  # Cube [y, x, lambda] image size
-    NDD = sysDims.NDD  # DD [y,x] image size
+    NDD = list(sysDims.NDD)  # DD [y,x] image size
     NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter
     DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 300
     NChannels = NCube[2]
@@ -40,11 +41,18 @@ def calibEstimatorSanityTest1():
 
     Cube = Cube.reshape([-1, 1, NCube[1], NCube[2]])
     DD = DD.reshape([-1, 1, NDD[1], 1])
+    DD_eval = np.zeros_like(DD)
 
+    calibEst.setModeEval()
+    calibEst.createNPArrayDatasets()
     calibEst.buildModel()
-    endloss = calibEst.CalcLoss(Cube, DD)
 
-    print('SanityTest1: loss is: {}'.format(endloss))
+    DD_eval = calibEst.eval(Xeval=Cube, Yeval=DD_eval)
+
+    diff = np.squeeze(DD_eval) - np.squeeze(DD)
+    maxAbsDiff = np.max(np.abs(diff))
+    loss = np.sum(np.square(diff))
+    print('l2 loss is {0:.4f}, max abs diff is {1:.4f}'.format(loss, maxAbsDiff))
 
 
 # create random data (for sanity tests):
@@ -52,13 +60,13 @@ def calibEstimatorSanityTest1():
 # DD images are created using the model that was verified in sanity test 1
 def calibEstimatorSanityTest2_createData():
     logfiledir = '/home/amiraz/Documents/CS SSI/TestFiles/SanityTest2/'
-    validDir = logfiledir + 'Valid/'
-    trainDir = logfiledir + 'Train/'
+    validDir = join(logfiledir, 'Valid')
+    trainDir = join(logfiledir, 'Train')
 
     # define sizes for tests:
     sysDims = SystemSettings.getSystemDimensions()
     NCube = sysDims.NCube  # Cube [y, x, lambda] image size
-    NDD = sysDims.NDD  # DD [y,x] image size
+    NDD = list(sysDims.NDD)  # DD [y,x] image size
     NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter
     DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 300
     NChannels = NCube[2]
@@ -74,15 +82,23 @@ def calibEstimatorSanityTest2_createData():
     Cube_valid = np.random.standard_normal(NCube_valid).astype(dtype=np.float32)
     Filts_GT = np.random.standard_normal((NChannels,NFilt)).astype(dtype=np.float32)
 
+    DD_train = np.zeros((NCube_train.shape[0], 1, NDD[1], 1), np.float32)
+    DD_valid = np.zeros((NCube_valid.shape[0], 1, NDD[1], 1), np.float32)
+
     # create the DD (Y) image:
-    cEst = CalibEstimator(NX = NCube, NY = NDD, L=NChannels, NFilt=NFilt, learningRate=0.01, batchSize=1, a0=Filts_GT)
+    cEst = CalibEstimator(NX=NCube, NY=NDD, L=NChannels, NFilt=NFilt, learningRate=0.01, batchSize=1, a0=Filts_GT)
+    cEst.setModeEval()
+    cEst.createNPArrayDatasets()
     cEst.buildModel()
-    DD_train = cEst.forwardPass(Cube_train)
-    DD_valid = cEst.forwardPass(Cube_valid)
+
+    DD_train = cEst.eval(Xeval=Cube_train, Yeval=DD_train)
+    DD_valid = cEst.eVal(Xeval=Cube_valid, Yeval=DD_valid)
+
+    cEst.resetModel()
 
     # save results:
     # filters:
-    filters_str =  logfiledir + 'filters_GT.rawImage'
+    filters_str = join(logfiledir, 'filters_GT.rawImage')
     imhand.writeImage(Filts_GT, filters_str)
 
     # save training data:
@@ -103,17 +119,17 @@ def calibEstimatorSanityTest2_createData():
 ## sanity test 2: train a network from a sinthesized random data and compare to the known filters
 def calibEstimatorSanityTest2():
     logfiledir = '/home/amiraz/Documents/CS SSI/TestFiles/SanityTest2/'
-    validDir = logfiledir + 'Valid/'
-    trainDir = logfiledir + 'Train/'
+    validDir = join(logfiledir, 'Valid')
+    trainDir = join(logfiledir, 'Train')
 
     # define sizes for tests:
     sysDims = SystemSettings.getSystemDimensions()
     NCube = sysDims.NCube  # Cube [y, x, lambda] image size
-    NDD = sysDims.NDD  # DD [y,x] image size
+    NDD = list(sysDims.NDD)  # DD [y,x] image size
     NFilt = sysDims.NFilt  # number of coefficients to be estimated for each lambda filter
     DDx_new = sysDims.DDx_new  # the amount of Data influenced by a filter of size 300
     NChannels = NCube[2]
-    NDD[1] = DDx_new # directly use DDx_new instead of the original size which is too big
+    NDD[1] = DDx_new  # directly use DDx_new instead of the original size which is too big
 
     # get train database
     myCreator = DatasetCreator(trainDir, NCube=NCube, NDD=NDD, maxNExamples=-1)
@@ -122,9 +138,8 @@ def calibEstimatorSanityTest2():
     # get validation database
     myCreator = DatasetCreator(validDir, NCube=NCube, NDD=NDD, maxNExamples=-1)
     valid_database = myCreator.getDataset()
-    NDD[1] = DDx_new
 
-    Filts_GT = imhand.readImage(logfiledir + 'filters_GT.rawImage')
+    Filts_GT = imhand.readImage(join(logfiledir, 'filters_GT.rawImage'))
 
     # run a training network and check the output weights
     # estimate calibration:
@@ -141,20 +156,17 @@ def calibEstimatorSanityTest2():
     cEst.train(Xtrain=train_database['Cubes'], Ytrain=train_database['DDs'],
                Xvalid=valid_database['Cubes'], Yvalid=valid_database['DDs'])
 
-
     Filts_Calib = cEst.getCalibratedWeights()
     imhand.writeImage(Filts_Calib, logfiledir + 'sanity_test_2_Filters_Calib.rawImage')
     imhand.writeImage(Filts_GT, logfiledir + 'sanity_test_2_Filters_GT.rawImage')
 
-
-    diff = np.linalg.norm(np.subtract(np.squeeze(Filts_Calib), np.squeeze(Filts_GT)), ord='fro')
-    print('difference between gt and calc is: {}'.format(diff))
-
-
-
+    diff = np.squeeze(Filts_Calib) - np.squeeze(Filts_GT)
+    maxAbsDiff = np.max(np.abs(diff))
+    error = np.sum(np.square(diff))/diff.size
+    print('error norm: {}, max abs error: {}'.format(error, maxAbsDiff))
 
 
-calibEstimatorSanityTest1()
+
+#calibEstimatorSanityTest1()
 #calibEstimatorSanityTest2()
-
 #calibEstimatorSanityTest2_createData()

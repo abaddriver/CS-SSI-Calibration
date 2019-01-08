@@ -50,11 +50,11 @@ class CalibEstimator:
         self.updatedWeights = a0
         self.numEpochs = numEpochs
         self.logfiledir = logfiledir
+        self.isTrain = True
         if useLossWeights is None:
             self.useLossWeights = 'None'
         else:
             self.useLossWeights = useLossWeights
-
 
         if self.logfiledir == '':
             self.logfiledir = './'
@@ -78,6 +78,9 @@ class CalibEstimator:
                 self.optimizer = 'gd'
         else:
             self.optimizer = optimizer
+
+    def setModeEval(self):
+        self.isTrain = False
 
     # createTFRecordDatasets
     # ----------------------
@@ -117,9 +120,12 @@ class CalibEstimator:
         self.tensors['y_data_GT'] = tf.placeholder(tf.float32, shape=[None, 1, self.dims['NY'][1], 1], name='y_GT')
         # dataset:
         self.tensors['train_dataset'] = tf.data.Dataset.from_tensor_slices(
-            (self.tensors['x_data'], self.tensors['y_data_GT'])). \
-            shuffle(_SHUFFLE_BUFFER_SIZE). \
-            repeat(self.numEpochs).batch(self.batchSize)
+            (self.tensors['x_data'], self.tensors['y_data_GT']))
+        if self.isTrain:
+            # for training the network only, do shuffle and repeat:
+            self.tensors['train_dataset'] = self.tensors['train_dataset'].\
+            shuffle(_SHUFFLE_BUFFER_SIZE).repeat(self.numEpochs)
+        self.tensors['train_dataset'] = self.tensors['train_dataset'].batch(self.batchSize)
         self.tensors['valid_dataset'] = tf.data.Dataset.from_tensor_slices(
             (self.tensors['x_data'], self.tensors['y_data_GT'])). \
             batch(self.batchSize)
@@ -324,7 +330,39 @@ class CalibEstimator:
             weights_var = tf.trainable_variables()[0]
             self.updatedWeights = np.squeeze(sess.run(weights_var)).T
 
+    # function eval
+    # --------------
+    # this function calculates the model on the evaluation set
+    # inputs:
+    #   Xeval -     X inputs to the network
+    #   Yeval -     Y expected output of the network (unused)
+    def eval(self, Xeval, Yeval):
+        print('CalibEstimator.eval()')
+        self.numExamples = Xeval.shape[0]
+        # allocate output:
+        Y_est_out = np.zeros((self.numExamples, self.dims['NY'][1]), dtype=np.float32)
+
+        if ((self.batchSize % self.numExamples) != 0):
+            print('Warning: batch size ({}) doesnt multiply numer of examples ({})'.format(self.batchSize, self.numExamples))
+        numBatchesEval = int(math.floor(self.numExamples / self.batchSize))
+
+        with tf.Session() as sess:
+
+            # init gloval variables and init
+            sess.run(tf.global_variables_initializer())
+
+            sess.run(self.tensors['train_init_op'],
+                     feed_dict={self.tensors['x_data']: Xeval, self.tensors['y_data_GT']: Yeval})
+            # run all train examples in batch:
+            for ii in range(numBatchesEval):
+                Y_est_out[ii*self.batchSize: (ii+1)*self.batchSize ,:] = np.squeeze(sess.run([self.tensors['y_est']]))
+
+        return Y_est_out
+
     def getCalibratedWeights(self):
         print('CalibEstimator.getCalibratedWeights()')
         return self.updatedWeights
+
+    def resetModel(self):
+        tf.reset_default_graph()
 
