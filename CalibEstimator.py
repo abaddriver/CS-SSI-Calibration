@@ -342,7 +342,7 @@ class CalibEstimator:
         # allocate output:
         Y_est_out = np.zeros((self.numExamples, self.dims['NY'][1]), dtype=np.float32)
 
-        if ((self.batchSize % self.numExamples) != 0):
+        if ((self.numExamples % self.batchSize) != 0):
             print('Warning: batch size ({}) doesnt multiply numer of examples ({})'.format(self.batchSize, self.numExamples))
         numBatchesEval = int(math.floor(self.numExamples / self.batchSize))
 

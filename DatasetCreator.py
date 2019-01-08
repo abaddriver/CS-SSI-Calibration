@@ -69,8 +69,8 @@ class DatasetCreator:
 
         self.filenames = []
         h_index_start = 0
-        Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=float)
-        DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1])
+        Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=np.float32)
+        DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1], dtype=np.float32)
 
         for cubepath, ddpath, in zip(CubeList, DDList):
             cube = imhand.readImage(cubepath)
