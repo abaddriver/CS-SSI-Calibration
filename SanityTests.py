@@ -82,17 +82,17 @@ def calibEstimatorSanityTest2_createData():
     Cube_valid = np.random.standard_normal(NCube_valid).astype(dtype=np.float32)
     Filts_GT = np.random.standard_normal((NChannels,NFilt)).astype(dtype=np.float32)
 
-    DD_train = np.zeros((NCube_train.shape[0], 1, NDD[1], 1), np.float32)
-    DD_valid = np.zeros((NCube_valid.shape[0], 1, NDD[1], 1), np.float32)
+    DD_train = np.zeros((NCube_train[0], 1, NDD[1], 1), np.float32)
+    DD_valid = np.zeros((NCube_valid[0], 1, NDD[1], 1), np.float32)
 
     # create the DD (Y) image:
-    cEst = CalibEstimator(NX=NCube, NY=NDD, L=NChannels, NFilt=NFilt, learningRate=0.01, batchSize=1, a0=Filts_GT)
+    cEst = CalibEstimator(NX=NCube, NY=NDD, L=NChannels, NFilt=NFilt, learningRate=0.01, batchSize=128, a0=Filts_GT)
     cEst.setModeEval()
     cEst.createNPArrayDatasets()
     cEst.buildModel()
 
     DD_train = cEst.eval(Xeval=Cube_train, Yeval=DD_train)
-    DD_valid = cEst.eVal(Xeval=Cube_valid, Yeval=DD_valid)
+    DD_valid = cEst.eval(Xeval=Cube_valid, Yeval=DD_valid)
 
     cEst.resetModel()
 
@@ -103,17 +103,17 @@ def calibEstimatorSanityTest2_createData():
 
     # save training data:
     for ii in range(numTrainExamples):
-        cube_str = trainDir + 'Img_{}_Cube.rawImage'.format(ii)
-        DD_str = trainDir + 'Img_{}_DD.rawImage'.format(ii)
+        cube_str = join(trainDir, 'Img_{}_Cube.rawImage'.format(ii))
+        DD_str = join(trainDir, 'Img_{}_DD.rawImage'.format(ii))
         imhand.writeImage(np.squeeze(Cube_train[ii*256:(ii+1)*256, :, :, :]), cube_str)
-        imhand.writeImage(np.squeeze(DD_train[ii * 256:(ii + 1) * 256, :, :, :]), DD_str)
+        imhand.writeImage(np.squeeze(DD_train[ii * 256:(ii + 1) * 256, :]), DD_str)
 
     # save validation data:
     for ii in range(numValidExamples):
-        cube_str = validDir + 'Img_{}_Cube.rawImage'.format(ii)
-        DD_str = validDir + 'Img_{}_DD.rawImage'.format(ii)
+        cube_str = join(validDir, 'Img_{}_Cube.rawImage'.format(ii))
+        DD_str = join(validDir, 'Img_{}_DD.rawImage'.format(ii))
         imhand.writeImage(np.squeeze(Cube_valid[ii*256:(ii+1)*256, :, :, :]), cube_str)
-        imhand.writeImage(np.squeeze(DD_valid[ii * 256:(ii + 1) * 256, :, :, :]), DD_str)
+        imhand.writeImage(np.squeeze(DD_valid[ii * 256:(ii + 1) * 256, :]), DD_str)
 
 
 ## sanity test 2: train a network from a sinthesized random data and compare to the known filters
@@ -141,6 +141,9 @@ def calibEstimatorSanityTest2():
 
     Filts_GT = imhand.readImage(join(logfiledir, 'filters_GT.rawImage'))
 
+    train_dict = {'Xtrain': train_database['Cubes'], 'Ytrain': train_database['DDs'],
+                  'Xvalid': valid_database['Cubes'], 'Yvalid': valid_database['DDs']}
+
     # run a training network and check the output weights
     # estimate calibration:
     cEst = CalibEstimator(NX=NCube,
@@ -151,11 +154,9 @@ def calibEstimatorSanityTest2():
                           batchSize=100,
                           numEpochs=10,
                           logfiledir=logfiledir)
-
+    cEst.createNPArrayDatasets()
     cEst.buildModel()
-    cEst.train(Xtrain=train_database['Cubes'], Ytrain=train_database['DDs'],
-               Xvalid=valid_database['Cubes'], Yvalid=valid_database['DDs'])
-
+    cEst.train(DBtype='NPArray', DBargs=train_dict)
     Filts_Calib = cEst.getCalibratedWeights()
     imhand.writeImage(Filts_Calib, logfiledir + 'sanity_test_2_Filters_Calib.rawImage')
     imhand.writeImage(Filts_GT, logfiledir + 'sanity_test_2_Filters_GT.rawImage')
@@ -168,5 +169,5 @@ def calibEstimatorSanityTest2():
 
 
 #calibEstimatorSanityTest1()
-#calibEstimatorSanityTest2()
 #calibEstimatorSanityTest2_createData()
+calibEstimatorSanityTest2()
