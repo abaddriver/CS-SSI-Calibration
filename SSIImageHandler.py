@@ -80,7 +80,7 @@ def visualizeImageGray(Im, layer=-1):
     plt.xticks([]), plt.yticks([])  # to hide tick values on X and Y axis
     plt.show()
 
-def visualizeFilters(Filts, lambdaInds=None):
+def visualizeFilters(Filts, lambdaInds=None, legends=None):
     # show filters as plots
     # inputs:
     #   Filts -         a list, containing 2 dimensional ndarrays, each one is a set of filters
@@ -88,21 +88,33 @@ def visualizeFilters(Filts, lambdaInds=None):
     #   lambdaInds -    a list, containing the indices of the frequencies to plot.
 
     # default lambdas: one's with the highest energy
+
+    # Filts input must be a list:
+    assert(type(Filts) is list)
+
+
     if lambdaInds == None:
         lambdaInds = [6, 15, 22]
 
+    if legends is None:
+        legends = list(map(str, range(len(Filts))))
+    else:
+        assert(len(legends) == len(Filts))
+
     plt.figure()
     numPlots = len(lambdaInds)
-    plotInd = 1;
+    plotInd = 1
 
     for lambdaInd in lambdaInds:
         plt.subplot(numPlots, 1, plotInd)
-        for F in Filts:
+        for (F, lgnd) in zip(Filts, legends):
             assert((F.shape[1] % 2) == 1)
             ext_x = int((F.shape[1] - 1)/2)
             xx = np.array(range(-1*ext_x, ext_x + 1), np.float32)
             yy = np.squeeze(F[lambdaInd, :])
-            plt.plot(xx, yy)
+            plt.plot(xx, yy, label=lgnd)
+        plt.legend()
+        plt.title('lambda index: {}'.format(lambdaInd))
         plotInd = plotInd + 1
 
 
