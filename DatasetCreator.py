@@ -16,13 +16,15 @@ class DatasetCreator:
                  NCube, # the dimensions of the spectral cube as [Nx, Ny, L] format
                  NDD,# the dimensions of the DD image, as [Nx, Ny] format
                  maxNExamples = -1,  # for testing: if specified, dataset will contain a maximum of maxNExamples images
-                 FiltersSynthetic=None):  # if specified, DD image is composed with these filters instead of real data
+                 FiltersSynthetic=None,  # if specified, DD image is composed with these filters instead of real data
+                 dtype=np.float32):
 
         print('DatasetCreator.__init__()')
         self.filenames = {}
         self.dataset = {}
         self.maxNExamples = maxNExamples
         self.FiltersSynthetic = FiltersSynthetic
+        self.dtype = dtype
 
         if NDD[0] != NCube[0]:
             print('Error: DatasetCreator init(): Cube and DD image differ in height')
@@ -69,8 +71,8 @@ class DatasetCreator:
 
         self.filenames = []
         h_index_start = 0
-        Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=np.float32)
-        DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1], dtype=np.float32)
+        Cubes = np.empty([self.NCube[0]*len(CubeList), 1, self.NCube[1], self.NCube[2]], dtype=self.dtype)
+        DDs = np.empty([self.NDD[0]*len(CubeList), 1, self.DDx_crop, 1], dtype=self.dtype)
 
         for cubepath, ddpath, in zip(CubeList, DDList):
             cube = imhand.readImage(cubepath)

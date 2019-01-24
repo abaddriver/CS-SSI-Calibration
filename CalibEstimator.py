@@ -30,7 +30,8 @@ class CalibEstimator:
                  useLossWeights=None,  # use weighted loss, loss types: {None,'None','proportional','squared','quad'}
                  lossFunc=None,  # loss functions: {None, 'l2_loss', 'l1_loss'}, default and None results in 'l2_loss'
                  regularizationFactor=0.001,  # regularization factor, to be used if loss contains regularization
-                 optimizer=None):  # optimizers: {'adam', 'gd'}
+                 optimizer=None,  # optimizers: {'adam', 'gd'}
+                 dtype=np.float32): # dtype: {np.float32, np.float64}
         # init function for estimator
         # inputs:
         #   NX - x,y dimensions of X image (spatial cube, with dimensions y and z joined)
@@ -51,6 +52,12 @@ class CalibEstimator:
         self.numEpochs = numEpochs
         self.logfiledir = logfiledir
         self.isTrain = True
+        self.npdtype=dtype
+        if dtype==np.float32:
+            self.tfdtype = tf.float32
+        elif dtype==np.float64:
+            self.tfdtype = tf.float64
+
         if useLossWeights is None:
             self.useLossWeights = 'None'
         else:
@@ -105,7 +112,7 @@ class CalibEstimator:
         for fn in validFilenames:
             numValidExamples += sum([1 for record in tf.python_io.tf_record_iterator(fn)])
 
-        self.numExamples = {'train': numTrainingExamples,'valid': numValidExamples}
+        self.numExamples = {'train': numTrainingExamples, 'valid': numValidExamples}
 
     # createNPArraysDatasets
     # ----------------------
@@ -114,10 +121,10 @@ class CalibEstimator:
         print('CalibEstimator.createNPArraysDatasets()')
         self.tensors = {}
         # input:
-        self.tensors['x_data'] = tf.placeholder(tf.float32, shape=[None, 1, self.dims['NX'][1], self.dims['NX'][2]],
+        self.tensors['x_data'] = tf.placeholder(self.tfdtype, shape=[None, 1, self.dims['NX'][1], self.dims['NX'][2]],
                                                 name='x')
         # output:
-        self.tensors['y_data_GT'] = tf.placeholder(tf.float32, shape=[None, 1, self.dims['NY'][1], 1], name='y_GT')
+        self.tensors['y_data_GT'] = tf.placeholder(self.tfdtype, shape=[None, 1, self.dims['NY'][1], 1], name='y_GT')
         # dataset:
         self.tensors['train_dataset'] = tf.data.Dataset.from_tensor_slices(
             (self.tensors['x_data'], self.tensors['y_data_GT']))
@@ -145,33 +152,27 @@ class CalibEstimator:
 
         # initializer for filters matrix
         if self.a0 is None:
-            kernelInit=tf.initializers.random_normal
-        else:
-            # transpose and reshape a0 matrix so that dimensions fit tensorflow
-            self.a0_ndarr=np.array(self.a0).T.reshape((1, self.dims['NFilt'], 1, self.dims['L']))
-            kernelInit=tf.constant_initializer(self.a0_ndarr)
-
+            self.a0 = np.random.normal(loc=0.0, scale=1.0, size=(self.dims['L'], self.dims['NFilt'])).astype(dtype=self.npdtype)
         # network:
         # find the padded value to match the output width:
         paddW = int((self.dims['NY'][1] - self.dims['NX'][1])/2)
-        padding = 'same'
+        padding = 'SAME'
         if paddW < 0:
             paddW = int((self.dims['NY'][1] + self.dims['NFilt'] - 1 - self.dims['NX'][1]) / 2)
-            padding = 'valid'
+            padding = 'VALID'
 
         self.tensors['x_padded'] = tf.pad(self.tensors['x'], [[0, 0], [0, 0], [paddW, paddW], [0, 0]], "CONSTANT")
+
         # convolutional layer:
-        self.tensors['y_est'] = tf.layers.conv2d(inputs=self.tensors['x_padded'],
-                                                     filters=1,
-                                                     kernel_size=(1, self.dims['NFilt']),
-                                                     kernel_initializer=kernelInit,
-                                                     padding=padding,
-                                                     activation=None,
-                                                     use_bias=False,
-                                                     name='x_filtered')
+        self.tensors['Filter'] = tf.Variable(
+            np.reshape(self.a0.T, (1, self.dims['NFilt'], self.dims['L'], 1)),
+            trainable=True)
+        self.tensors['y_est'] = tf.nn.conv2d(input=self.tensors['x_padded'],
+                                             filter=self.tensors['Filter'],
+                                             strides=(1,1,1,1),
+                                             padding=padding)
 
-
-        #loss function:
+        # loss function:
         if self.useLossWeights == 'None':
             self.tensors['loss_weights'] = 1.0
 
@@ -181,7 +182,7 @@ class CalibEstimator:
             _peakLength = self.dims['NX'][1] + self.dims['NFilt'] - 1 - 2*(_maxCoeffs - 1)
             weights_list = np.array(list(range(minConvCoeffs+1,_maxCoeffs)) +
                                     [_maxCoeffs] * _peakLength +
-                                    list(range(_maxCoeffs-1, minConvCoeffs, -1)), dtype=np.float32)
+                                    list(range(_maxCoeffs-1, minConvCoeffs, -1)), dtype=np.float64)
 
             weights_list = weights_list / np.max(weights_list)
             if self.useLossWeights == 'squared':
@@ -193,7 +194,7 @@ class CalibEstimator:
                 weights_list = np.exp(weights_list)
 
             weights_list = weights_list.reshape((1, 1, weights_list.size, 1))
-            self.tensors['loss_weights'] = tf.constant(weights_list, tf.float32)
+            self.tensors['loss_weights'] = tf.constant(weights_list, self.tfdtype)
         else:
             print('useLossWeights: unknown option: ' + str(self.useLossWeights))
             assert(0)
@@ -230,7 +231,7 @@ class CalibEstimator:
             self.numExamples = {'train': DBargs['Xtrain'].shape[0], 'valid': DBargs['Xvalid'].shape[0]}
 
          # set the optimizer and training operation:
-        self.tensors['learningRate'] = tf.placeholder(tf.float32, shape=[])
+        self.tensors['learningRate'] = tf.placeholder(self.tfdtype, shape=[])
         if self.optimizer == 'gd':
             optimizer = tf.train.GradientDescentOptimizer(self.tensors['learningRate'])
         else:
@@ -262,6 +263,13 @@ class CalibEstimator:
 
             numBatchesTrain = int(math.floor(self.numExamples['train'] / self.batchSize))
             numBatchesValid = int(math.floor(self.numExamples['valid'] / self.batchSize))
+
+            # save starting weights:
+            weights_var = tf.trainable_variables()[0]
+            imhand.writeImage(np.squeeze(sess.run(weights_var)).T, join(self.logfiledir, 'a0.rawImage'))
+
+            # gradients:
+            # grad_var = tf.gradients([self.tensors['loss']], weights_var)[0]
 
             # loop over epochs and examples:
             for epoch in range(self.numEpochs):
@@ -322,7 +330,6 @@ class CalibEstimator:
 
                 if (epoch % 10) == 0:
                     # get calibration and save to file:
-                    weights_var = tf.trainable_variables()[0]
                     self.updatedWeights = np.squeeze(sess.run(weights_var)).T
                     imhand.writeImage(self.updatedWeights, join(self.logfiledir, "Filter_temp_epoch{}".format(epoch)))
 
@@ -340,7 +347,7 @@ class CalibEstimator:
         print('CalibEstimator.eval()')
         self.numExamples = Xeval.shape[0]
         # allocate output:
-        Y_est_out = np.zeros((self.numExamples, self.dims['NY'][1]), dtype=np.float32)
+        Y_est_out = np.zeros((self.numExamples, self.dims['NY'][1]), dtype=self.npdtype)
 
         if ((self.numExamples % self.batchSize) != 0):
             print('Warning: batch size ({}) doesnt multiply numer of examples ({})'.format(self.batchSize, self.numExamples))
@@ -355,7 +362,7 @@ class CalibEstimator:
                      feed_dict={self.tensors['x_data']: Xeval, self.tensors['y_data_GT']: Yeval})
             # run all train examples in batch:
             for ii in range(numBatchesEval):
-                Y_est_out[ii*self.batchSize: (ii+1)*self.batchSize ,:] = np.squeeze(sess.run([self.tensors['y_est']]))
+                Y_est_out[ii*self.batchSize: (ii+1)*self.batchSize, :] = np.squeeze(sess.run([self.tensors['y_est']]))
 
         return Y_est_out
 
@@ -365,4 +372,3 @@ class CalibEstimator:
 
     def resetModel(self):
         tf.reset_default_graph()
-
